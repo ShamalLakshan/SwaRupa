@@ -1,60 +1,69 @@
 package handlers
 
 import (
-	"database/sql"
+	"context"
 	"net/http"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var DB *sql.DB // Assign DB from main.go
+// CreateAlbum handler
+func CreateAlbum(db *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			ArtistID    string `json:"artist_id" binding:"required"`
+			Title       string `json:"title" binding:"required"`
+			ReleaseYear int    `json:"release_year"`
+		}
 
-func CreateAlbum(c *gin.Context) {
-	var req struct {
-		ArtistID    string `json:"artist_id" binding:"required"`
-		Title       string `json:"title" binding:"required"`
-		ReleaseYear int    `json:"release_year"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
-		return
-	}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "artist_id and title are required"})
+			return
+		}
 
-	// Check if artist exists
-	row := DB.QueryRow("SELECT id FROM artists WHERE id = ?", req.ArtistID)
-	var artistID string
-	if err := row.Scan(&artistID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "artist not found"})
-		return
-	}
+		id := uuid.New().String()
 
-	id := uuid.New().String()
-	_, err := DB.Exec("INSERT INTO albums (id, artist_id, title, release_year) VALUES (?, ?, ?, ?)",
-		id, req.ArtistID, req.Title, req.ReleaseYear)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to insert album"})
-		return
-	}
+		_, err := db.Exec(
+			context.Background(),
+			"INSERT INTO albums (id, artist_id, title, release_year) VALUES ($1, $2, $3, $4)",
+			id, req.ArtistID, req.Title, req.ReleaseYear,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to insert album"})
+			return
+		}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"id":           id,
-		"artist_id":    req.ArtistID,
-		"title":        req.Title,
-		"release_year": req.ReleaseYear,
-	})
+		album := models.Album{
+			ID:          id,
+			ArtistID:    req.ArtistID,
+			Title:       req.Title,
+			ReleaseYear: req.ReleaseYear,
+		}
+
+		c.JSON(http.StatusCreated, album)
+	}
 }
 
-func GetAlbum(c *gin.Context) {
-	id := c.Param("id")
-	row := DB.QueryRow("SELECT id, artist_id, title, release_year FROM albums WHERE id = ?", id)
+// GetAlbum handler
+func GetAlbum(db *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
 
-	var album models.Album
-	if err := row.Scan(&album.ID, &album.ArtistID, &album.Title, &album.ReleaseYear); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "album not found"})
-		return
+		var album models.Album
+		err := db.QueryRow(
+			context.Background(),
+			"SELECT id, artist_id, title, release_year FROM albums WHERE id=$1",
+			id,
+		).Scan(&album.ID, &album.ArtistID, &album.Title, &album.ReleaseYear)
+
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "album not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, album)
 	}
-
-	c.JSON(http.StatusOK, album)
 }

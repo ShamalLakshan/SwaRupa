@@ -1,45 +1,45 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/ShamalLakshan/SwaRupa/internal/db"
+	"github.com/ShamalLakshan/SwaRupa/internal/database"
 	"github.com/ShamalLakshan/SwaRupa/internal/handlers"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Initialize DB
-	database := db.Connect()
-	defer database.Close()
+	// Load .env
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("No .env file found, using system env")
+	}
 
-	// Assign DB to handlers
-	handlers.DB = database
+	// Connect to Supabase
+	database.Connect()
+	defer database.Close()
 
 	r := gin.Default()
 
-	// Health endpoint
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Artist endpoints
-	r.POST("/artists", handlers.CreateArtist(database))
-	r.GET("/artists/:id", handlers.GetArtist(database))
+	// Pass database.DB (the connection pool) to handlers
+	r.POST("/artists", handlers.CreateArtist(database.DB))
+	r.GET("/artists/:id", handlers.GetArtist(database.DB))
 
-	// Album endpoints
-	r.POST("/albums", handlers.CreateAlbum)
-	r.GET("/albums/:id", handlers.GetAlbum)
+	r.POST("/albums", handlers.CreateAlbum(database.DB))
+	r.GET("/albums/:id", handlers.GetAlbum(database.DB))
 
-	// Artwork endpoints
-	r.POST("/albums/:id/artworks", handlers.CreateArtwork)
-	r.GET("/albums/:id/artworks", handlers.GetArtworks)
+	r.POST("/albums/:id/artworks", handlers.CreateArtwork(database.DB))
+	r.GET("/albums/:id/artworks", handlers.GetArtworksByAlbum(database.DB))
 
-	fmt.Println("Server running on http://localhost:8080")
+	log.Println("Server running on http://localhost:8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to start server:", err)
 	}
 }
