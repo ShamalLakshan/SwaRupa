@@ -83,7 +83,7 @@ func GetAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 
-		// 1. Fetch album row
+		// Fetch album row
 		var album models.Album
 		var submittedBy *string
 
@@ -101,7 +101,7 @@ func GetAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 			album.SubmittedBy = *submittedBy
 		}
 
-		// 2. Fetch linked artists via album_artists join
+		// Fetch linked artists via album_artists join
 		rows, err := db.Query(
 			context.Background(),
 			`SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at

@@ -11,7 +11,7 @@ import (
 )
 
 // CreateUser handler
-// The ID comes from the client (Firebase/Supabase Auth UID).
+// The ID should come from the client (Firebase/Supabase Auth UID).
 func CreateUser(db *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req struct {
