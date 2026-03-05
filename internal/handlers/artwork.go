@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/gin-gonic/gin"
@@ -17,7 +19,7 @@ func CreateArtwork(db *pgxpool.Pool) gin.HandlerFunc {
 
 		var req struct {
 			SourceID     string `json:"source_id"`
-			ImageURL     string `json:"image_url" binding:"required"`
+			ImageURL     string `json:"image_url"     binding:"required"`
 			ThumbnailURL string `json:"thumbnail_url"`
 			IsOfficial   bool   `json:"is_official"`
 			SubmittedBy  string `json:"submitted_by"`
@@ -32,17 +34,22 @@ func CreateArtwork(db *pgxpool.Pool) gin.HandlerFunc {
 
 		_, err := db.Exec(
 			context.Background(),
-			`INSERT INTO artworks (
-				id, album_id, source_id, image_url, thumbnail_url, is_official, submitted_by, approval_status, priority_score
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-			id, albumID, req.SourceID, req.ImageURL, req.ThumbnailURL, req.IsOfficial, req.SubmittedBy, "pending", 0,
+			`INSERT INTO artworks
+				(id, album_id, source_id, image_url, thumbnail_url, is_official, submitted_by, approval_status, priority_score)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 0)`,
+			id, albumID,
+			nullableString(req.SourceID),
+			req.ImageURL,
+			nullableString(req.ThumbnailURL),
+			req.IsOfficial,
+			nullableString(req.SubmittedBy),
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to insert artwork"})
 			return
 		}
 
-		artwork := models.Artwork{
+		c.JSON(http.StatusCreated, models.Artwork{
 			ID:             id,
 			AlbumID:        albumID,
 			SourceID:       req.SourceID,
@@ -52,25 +59,46 @@ func CreateArtwork(db *pgxpool.Pool) gin.HandlerFunc {
 			SubmittedBy:    req.SubmittedBy,
 			ApprovalStatus: "pending",
 			PriorityScore:  0,
-		}
-
-		c.JSON(http.StatusCreated, artwork)
+			CreatedAt:      time.Now(),
+		})
 	}
 }
 
 // GetArtworksByAlbum handler
+// Supports query params:
+//
+//	?status=approved|pending|rejected
+//	?official=true
+//	?sort=priority
 func GetArtworksByAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		albumID := c.Param("id")
 
-		rows, err := db.Query(
-			context.Background(),
-			`SELECT id, album_id, source_id, image_url, thumbnail_url, is_official,
-			        submitted_by, approval_status, priority_score
-			 FROM artworks
-			 WHERE album_id=$1`,
-			albumID,
-		)
+		// --- Build query dynamically based on filters ---
+		query := `SELECT id, album_id, source_id, image_url, thumbnail_url,
+		                 is_official, submitted_by, approval_status, priority_score, created_at
+		          FROM artworks
+		          WHERE album_id = $1`
+		args := []any{albumID}
+		argIdx := 2
+
+		if status := c.Query("status"); status != "" {
+			query += fmt.Sprintf(" AND approval_status = $%d", argIdx)
+			args = append(args, status)
+			argIdx++
+		}
+
+		if c.Query("official") == "true" {
+			query += " AND is_official = true"
+		}
+
+		if c.Query("sort") == "priority" {
+			query += " ORDER BY priority_score DESC"
+		} else {
+			query += " ORDER BY created_at DESC"
+		}
+
+		rows, err := db.Query(context.Background(), query, args...)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch artworks"})
 			return
@@ -79,21 +107,29 @@ func GetArtworksByAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 
 		var artworks []models.Artwork
 		for rows.Next() {
-			var artwork models.Artwork
+			var aw models.Artwork
+			var sourceID, thumbnailURL, submittedBy *string
+
 			if err := rows.Scan(
-				&artwork.ID,
-				&artwork.AlbumID,
-				&artwork.SourceID,
-				&artwork.ImageURL,
-				&artwork.ThumbnailURL,
-				&artwork.IsOfficial,
-				&artwork.SubmittedBy,
-				&artwork.ApprovalStatus,
-				&artwork.PriorityScore,
+				&aw.ID, &aw.AlbumID, &sourceID, &aw.ImageURL, &thumbnailURL,
+				&aw.IsOfficial, &submittedBy, &aw.ApprovalStatus, &aw.PriorityScore, &aw.CreatedAt,
 			); err != nil {
 				continue
 			}
-			artworks = append(artworks, artwork)
+			if sourceID != nil {
+				aw.SourceID = *sourceID
+			}
+			if thumbnailURL != nil {
+				aw.ThumbnailURL = *thumbnailURL
+			}
+			if submittedBy != nil {
+				aw.SubmittedBy = *submittedBy
+			}
+			artworks = append(artworks, aw)
+		}
+
+		if artworks == nil {
+			artworks = []models.Artwork{}
 		}
 
 		c.JSON(http.StatusOK, artworks)

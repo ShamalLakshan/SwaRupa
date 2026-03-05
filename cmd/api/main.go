@@ -13,8 +13,7 @@ import (
 
 func main() {
 	// Load .env
-	err := godotenv.Load()
-	if err != nil {
+	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found, using system env")
 	}
 
@@ -24,17 +23,24 @@ func main() {
 
 	r := gin.Default()
 
+	// Health check
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Pass database.DB (the connection pool) to handlers
+	// ── Users ─────────────────────────────────────────────
+	r.POST("/users", handlers.CreateUser(database.DB))
+	r.GET("/users/:id", handlers.GetUser(database.DB))
+
+	// ── Artists ───────────────────────────────────────────
 	r.POST("/artists", handlers.CreateArtist(database.DB))
 	r.GET("/artists/:id", handlers.GetArtist(database.DB))
 
+	// ── Albums ────────────────────────────────────────────
 	r.POST("/albums", handlers.CreateAlbum(database.DB))
 	r.GET("/albums/:id", handlers.GetAlbum(database.DB))
 
+	// ── Artworks ──────────────────────────────────────────
 	r.POST("/albums/:id/artworks", handlers.CreateArtwork(database.DB))
 	r.GET("/albums/:id/artworks", handlers.GetArtworksByAlbum(database.DB))
 

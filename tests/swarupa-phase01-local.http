@@ -1,0 +1,285 @@
+### SwaRupa API — Phase 1 Endpoint Tests
+### Base URL: http://localhost:8080
+
+
+# ==============================================================
+# HEALTH
+# ==============================================================
+
+### Health Check
+GET http://localhost:8080/health
+
+
+# ==============================================================
+# USERS
+# ==============================================================
+
+### 1. Create User
+POST http://localhost:8080/users
+Content-Type: application/json
+
+{
+  "id": "user_001",
+  "display_name": "patrick"
+}
+
+---
+
+### 2. Create User — missing id (expect 400)
+POST http://localhost:8080/users
+Content-Type: application/json
+
+{
+  "display_name": "No ID User"
+}
+
+---
+
+### 3. Get User by ID
+GET http://localhost:8080/users/user_001
+
+---
+
+### 4. Get User — not found (expect 404)
+GET http://localhost:8080/users/nonexistent_user
+
+
+# ==============================================================
+# ARTISTS
+# ==============================================================
+
+### 5. Create Artist — full fields
+POST http://localhost:8080/artists
+Content-Type: application/json
+
+{
+  "name": "Sunil Edirisinghe",
+  "musicbrainz_id": "a74b1b7f-71a5-4011-9441-d0b5e4146738",
+  "image_url": "https://example.com/SunilEdirisinghe.jpg",
+  "submitted_by": "user_001"
+}
+
+---
+
+### 6. Create Artist — minimal (name only)
+POST http://localhost:8080/artists
+Content-Type: application/json
+
+{
+  "name": "Thom Yorke"
+}
+
+---
+
+### 7. Create Artist — missing name (expect 400)
+POST http://localhost:8080/artists
+Content-Type: application/json
+
+{
+  "image_url": "https://example.com/image.jpg"
+}
+
+---
+
+### 8. Get Artist by ID
+# Replace ARTIST_ID with the id returned from step 5
+GET http://localhost:8080/artists/a471576f-5077-4af2-bb16-a85e13c0ee7d
+
+---
+
+### 9. Get Artist — not found (expect 404)
+GET http://localhost:8080/artists/00000000-0000-0000-0000-000000000000
+
+
+# ==============================================================
+# ALBUMS
+# ==============================================================
+### 10. Create Album — single artist
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "title": "Sunils album",
+  "release_year": 1997,
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d"],
+  "submitted_by": "user_001"
+}
+
+---
+
+### 11. Create Album — multiple artists (collaboration)
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "title": "Collaborative Album",
+  "release_year": 2024,
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d", "ea78e9c8-e3f0-47c4-b027-7aff8d8c2cb9"],
+  "submitted_by": "user_001"
+}
+
+---
+
+### 12. Create Album — no release year (optional field)
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "title": "Untitled Album",
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d"]
+}
+
+---
+
+### 13. Create Album — missing title (expect 400)
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "release_year": 2024,
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d"]
+}
+
+---
+
+### 14. Create Album — missing artist_ids (expect 400)
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "title": "No Artists Album"
+}
+
+---
+
+### 15. Create Album — empty artist_ids (expect 400)
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "title": "Empty Artists",
+  "artist_ids": []
+}
+
+---
+
+### 16. Create Album — invalid artist_id that doesn't exist in DB (expect 500, FK violation)
+POST http://localhost:8080/albums
+Content-Type: application/json
+
+{
+  "title": "Bad Artist Ref",
+  "artist_ids": ["00000000-0000-0000-0000-000000000000"]
+}
+
+---
+
+### 17. Get Album by ID — should include artists array
+# Replace ALBUM_ID with the id returned from step 10
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2
+
+---
+
+### 18. Get Album — collaboration (should show both artists)
+# Replace COLLAB_ALBUM_ID with the id returned from step 11
+GET http://localhost:8080/albums/338563cd-3d8d-4f8d-bcff-18f540ae4411
+
+---
+
+### 19. Get Album — not found (expect 404)
+GET http://localhost:8080/albums/00000000-0000-0000-0000-000000000000
+
+
+# ==============================================================
+# ARTWORKS
+# ==============================================================
+
+### 20. Submit Artwork — full fields
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
+Content-Type: application/json
+
+{
+  "source_id": "coverartarchive_001",
+  "image_url": "https://example.com/ok-computer-cover.jpg",
+  "thumbnail_url": "https://example.com/ok-computer-thumb.jpg",
+  "is_official": true,
+  "submitted_by": "user_001"
+}
+
+---
+
+### 21. Submit Artwork — minimal (image_url only)
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
+Content-Type: application/json
+
+{
+  "image_url": "https://example.com/fan-art.jpg"
+}
+
+---
+
+### 22. Submit Artwork — unofficial fan art
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
+Content-Type: application/json
+
+{
+  "image_url": "https://example.com/fanart2.jpg",
+  "is_official": false,
+  "submitted_by": "user_001"
+}
+
+---
+
+### 23. Submit Artwork — missing image_url (expect 400)
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
+Content-Type: application/json
+
+{
+  "thumbnail_url": "https://example.com/thumb.jpg"
+}
+
+---
+
+### 24. Get all artworks for album — no filters
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
+
+---
+
+### 25. Get artworks — filter by pending status
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=pending
+
+---
+
+### 26. Get artworks — filter by approved status
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=approved
+
+---
+
+### 27. Get artworks — filter by rejected status
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=rejected
+
+---
+
+### 28. Get artworks — official only
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?official=true
+
+---
+
+### 29. Get artworks — sorted by priority score
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?sort=priority
+
+---
+
+### 30. Get artworks — combined filter: official + priority sort
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?official=true&sort=priority
+
+---
+
+### 31. Get artworks — combined filter: approved + priority sort
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=approved&sort=priority
+
+---
+
+### 32. Get artworks — album with no artworks (expect empty array [])
+# Use an album ID that has no artworks submitted yet
+GET http://localhost:8080/albums/ALBUM_ID_EMPTY/artworks
