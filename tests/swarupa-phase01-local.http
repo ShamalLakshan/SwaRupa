@@ -1,6 +1,5 @@
 ### SwaRupa API — Phase 1 Endpoint Tests
 ### Base URL: http://localhost:8080
-### Use with REST Client (VS Code)
 
 
 # ==============================================================
@@ -21,7 +20,7 @@ Content-Type: application/json
 
 {
   "id": "user_001",
-  "display_name": "Shamal"
+  "display_name": "patrick"
 }
 
 ---
@@ -54,9 +53,9 @@ POST http://localhost:8080/artists
 Content-Type: application/json
 
 {
-  "name": "Radiohead",
-  "musicbrainz_id": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
-  "image_url": "https://example.com/radiohead.jpg",
+  "name": "Sunil Edirisinghe",
+  "musicbrainz_id": "a74b1b7f-71a5-4011-9441-d0b5e4146738",
+  "image_url": "https://example.com/SunilEdirisinghe.jpg",
   "submitted_by": "user_001"
 }
 
@@ -84,7 +83,7 @@ Content-Type: application/json
 
 ### 8. Get Artist by ID
 # Replace ARTIST_ID with the id returned from step 5
-GET http://localhost:8080/artists/ARTIST_ID
+GET http://localhost:8080/artists/a471576f-5077-4af2-bb16-a85e13c0ee7d
 
 ---
 
@@ -95,17 +94,14 @@ GET http://localhost:8080/artists/00000000-0000-0000-0000-000000000000
 # ==============================================================
 # ALBUMS
 # ==============================================================
-# Before running these, copy the artist IDs returned from steps 5 and 6
-# and replace ARTIST_ID_1 and ARTIST_ID_2 below.
-
 ### 10. Create Album — single artist
 POST http://localhost:8080/albums
 Content-Type: application/json
 
 {
-  "title": "OK Computer",
+  "title": "Sunils album",
   "release_year": 1997,
-  "artist_ids": ["ARTIST_ID_1"],
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d"],
   "submitted_by": "user_001"
 }
 
@@ -118,7 +114,7 @@ Content-Type: application/json
 {
   "title": "Collaborative Album",
   "release_year": 2024,
-  "artist_ids": ["ARTIST_ID_1", "ARTIST_ID_2"],
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d", "ea78e9c8-e3f0-47c4-b027-7aff8d8c2cb9"],
   "submitted_by": "user_001"
 }
 
@@ -130,7 +126,7 @@ Content-Type: application/json
 
 {
   "title": "Untitled Album",
-  "artist_ids": ["ARTIST_ID_1"]
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d"]
 }
 
 ---
@@ -141,7 +137,7 @@ Content-Type: application/json
 
 {
   "release_year": 2024,
-  "artist_ids": ["ARTIST_ID_1"]
+  "artist_ids": ["a471576f-5077-4af2-bb16-a85e13c0ee7d"]
 }
 
 ---
@@ -180,13 +176,13 @@ Content-Type: application/json
 
 ### 17. Get Album by ID — should include artists array
 # Replace ALBUM_ID with the id returned from step 10
-GET http://localhost:8080/albums/ALBUM_ID
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2
 
 ---
 
 ### 18. Get Album — collaboration (should show both artists)
 # Replace COLLAB_ALBUM_ID with the id returned from step 11
-GET http://localhost:8080/albums/COLLAB_ALBUM_ID
+GET http://localhost:8080/albums/338563cd-3d8d-4f8d-bcff-18f540ae4411
 
 ---
 
@@ -197,10 +193,9 @@ GET http://localhost:8080/albums/00000000-0000-0000-0000-000000000000
 # ==============================================================
 # ARTWORKS
 # ==============================================================
-# Replace ALBUM_ID with a valid album ID from steps above.
 
 ### 20. Submit Artwork — full fields
-POST http://localhost:8080/albums/ALBUM_ID/artworks
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
 Content-Type: application/json
 
 {
@@ -214,7 +209,7 @@ Content-Type: application/json
 ---
 
 ### 21. Submit Artwork — minimal (image_url only)
-POST http://localhost:8080/albums/ALBUM_ID/artworks
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
 Content-Type: application/json
 
 {
@@ -224,7 +219,7 @@ Content-Type: application/json
 ---
 
 ### 22. Submit Artwork — unofficial fan art
-POST http://localhost:8080/albums/ALBUM_ID/artworks
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
 Content-Type: application/json
 
 {
@@ -236,7 +231,7 @@ Content-Type: application/json
 ---
 
 ### 23. Submit Artwork — missing image_url (expect 400)
-POST http://localhost:8080/albums/ALBUM_ID/artworks
+POST http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
 Content-Type: application/json
 
 {
@@ -246,42 +241,42 @@ Content-Type: application/json
 ---
 
 ### 24. Get all artworks for album — no filters
-GET http://localhost:8080/albums/ALBUM_ID/artworks
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks
 
 ---
 
 ### 25. Get artworks — filter by pending status
-GET http://localhost:8080/albums/ALBUM_ID/artworks?status=pending
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=pending
 
 ---
 
 ### 26. Get artworks — filter by approved status
-GET http://localhost:8080/albums/ALBUM_ID/artworks?status=approved
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=approved
 
 ---
 
 ### 27. Get artworks — filter by rejected status
-GET http://localhost:8080/albums/ALBUM_ID/artworks?status=rejected
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=rejected
 
 ---
 
 ### 28. Get artworks — official only
-GET http://localhost:8080/albums/ALBUM_ID/artworks?official=true
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?official=true
 
 ---
 
 ### 29. Get artworks — sorted by priority score
-GET http://localhost:8080/albums/ALBUM_ID/artworks?sort=priority
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?sort=priority
 
 ---
 
 ### 30. Get artworks — combined filter: official + priority sort
-GET http://localhost:8080/albums/ALBUM_ID/artworks?official=true&sort=priority
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?official=true&sort=priority
 
 ---
 
 ### 31. Get artworks — combined filter: approved + priority sort
-GET http://localhost:8080/albums/ALBUM_ID/artworks?status=approved&sort=priority
+GET http://localhost:8080/albums/f5527ad3-6e7c-4f98-81da-0fc396b6c5d2/artworks?status=approved&sort=priority
 
 ---
 
