@@ -12,7 +12,7 @@ import (
 var DB *pgxpool.Pool
 
 func Connect() {
-	dsn := os.Getenv("DATABASE_URL")
+	dsn := os.Getenv("POOLER_DATABASE_URL")
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is not set")
 	}
@@ -44,7 +44,7 @@ func Connect() {
 		log.Fatalf("Failed to connect to database: %v\n", err)
 	}
 
-	log.Println("✅ Connected to Supabase PostgreSQL")
+	log.Println("Connected to Supabase PostgreSQL")
 }
 
 func Close() {

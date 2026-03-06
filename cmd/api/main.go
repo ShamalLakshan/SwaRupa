@@ -24,25 +24,30 @@ func main() {
 	r := gin.Default()
 
 	// Health check
-	r.GET("/health", func(c *gin.Context) {
+	r.GET("/api/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
+	// Welcome
+	r.GET("/api/welcome", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"api-health": "ok", "docs": "documentation-link-ToBeUpdated"})
+	})
+
 	// ── Users ─────────────────────────────────────────────
-	r.POST("/users", handlers.CreateUser(database.DB))
-	r.GET("/users/:id", handlers.GetUser(database.DB))
+	r.POST("/api/users", handlers.CreateUser(database.DB))
+	r.GET("/api/users/:id", handlers.GetUser(database.DB))
 
 	// ── Artists ───────────────────────────────────────────
-	r.POST("/artists", handlers.CreateArtist(database.DB))
-	r.GET("/artists/:id", handlers.GetArtist(database.DB))
+	r.POST("/api/artists", handlers.CreateArtist(database.DB))
+	r.GET("/api/artists/:id", handlers.GetArtist(database.DB))
 
 	// ── Albums ────────────────────────────────────────────
-	r.POST("/albums", handlers.CreateAlbum(database.DB))
-	r.GET("/albums/:id", handlers.GetAlbum(database.DB))
+	r.POST("/api/albums", handlers.CreateAlbum(database.DB))
+	r.GET("/api/albums/:id", handlers.GetAlbum(database.DB))
 
 	// ── Artworks ──────────────────────────────────────────
-	r.POST("/albums/:id/artworks", handlers.CreateArtwork(database.DB))
-	r.GET("/albums/:id/artworks", handlers.GetArtworksByAlbum(database.DB))
+	r.POST("/api/albums/:id/artworks", handlers.CreateArtwork(database.DB))
+	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(database.DB))
 
 	log.Println("Server running on http://localhost:8080")
 	if err := r.Run(":8080"); err != nil {
