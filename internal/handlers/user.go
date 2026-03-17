@@ -139,3 +139,94 @@ func GetUser(db *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, user)
 	}
 }
+
+// GetAllUsers handles GET /api/users requests to retrieve all user records from the database.
+// This endpoint is useful for admin dashboards, user directories, or permission management interfaces.
+// Includes all users regardless of role, ordered by creation timestamp to show newest users first.
+//
+// SQL Operation:
+// Executes SELECT id, display_name, role, created_at FROM users
+// to retrieve all user records. Results are ordered by created_at DESC to show newest users first.
+// Nullable columns (display_name) are scanned into pointer types (*string) and omitted from JSON
+// responses if NULL per the struct tag annotations.
+//
+// Response:
+// - 200 OK: Query successful; returns array of User models (empty array if no users exist)
+// - 500 Internal Server Error: Database error (connection, query failure, etc.)
+func GetAllUsers(db *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Execute multi-row SELECT query to retrieve all users, ordered by creation timestamp descending.
+		// Query() returns a Rows iterator for variable-length result sets.
+		// The iterator must be explicitly closed to release database resources.
+		rows, err := db.Query(
+			context.Background(),
+			`SELECT id, display_name, role, created_at FROM users ORDER BY created_at DESC`,
+		)
+		if err != nil {
+			// Query errors indicate database connectivity or syntax issues (this should not happen in production).
+			// Return 500 and log the error for operational troubleshooting.
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query users"})
+			return
+		}
+		// Defer rows.Close() to ensure the result iterator is properly cleaned up.
+		// Failure to close rows can leak server-side cursor resources; in high-traffic systems,
+		// this can eventually exhaust the connection pool and cause cascading failures.
+		defer rows.Close()
+
+		// Initialize a slice to hold all user records from the query results.
+		// Using make with zero length and capacity allows dynamic growth via append().
+		var users []models.User
+
+		// Iterate over all result rows using rows.Next().
+		// Next() returns false when all rows have been consumed or an error occurs.
+		for rows.Next() {
+			var user models.User
+			var displayName *string
+
+			// Scan the current row's values into Go variables.
+			// Pointers like displayName allow NULL values to be represented as nil;
+			// scalar fields receive zero values if NULL (Go's default behavior).
+			err := rows.Scan(
+				&user.ID,
+				&displayName,
+				&user.Role,
+				&user.CreatedAt,
+			)
+			if err != nil {
+				// Scan errors indicate corrupted data or type mismatches and trigger a 500 response.
+				// In production, log this error with row information for debugging.
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scan user row"})
+				return
+			}
+
+			// Dereference the nullable displayName pointer and assign to the model.
+			// This pattern distinguishes between unset fields (NULL -> nil) and default values.
+			// Consistent with GetUser for API consistency.
+			if displayName != nil {
+				user.DisplayName = *displayName
+			}
+
+			// Append the populated user to the result slice.
+			// Go's slice append operation automatically handles growth and reallocation.
+			users = append(users, user)
+		}
+
+		// Check rows iterator error status after the loop completes.
+		// This catches any errors that occurred during iteration but were not raised in Next().
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error iterating users"})
+			return
+		}
+
+		// Ensure non-nil JSON output: initialize to empty slice if no users exist.
+		// This provides a consistent API contract; empty results are always [] in JSON.
+		if users == nil {
+			users = []models.User{}
+		}
+
+		// Marshal the users slice to JSON and return HTTP 200 OK.
+		// Gin's JSON() method handles encoding; Content-Type is automatically set to application/json.
+		c.JSON(http.StatusOK, users)
+	}
+}
+

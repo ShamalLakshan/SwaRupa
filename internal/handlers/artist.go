@@ -164,3 +164,101 @@ func GetArtist(db *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, artist)
 	}
 }
+
+// GetAllArtists handles GET /api/artists requests to retrieve all artist records from the database.
+// The endpoint returns a paginated or complete list of artists depending on query parameters.
+// This endpoint is useful for populating artist directories, dropdowns, or full metadata exports.
+//
+// SQL Operation:
+// Executes SELECT id, name, musicbrainz_id, image_url, submitted_by, created_at FROM artists
+// to retrieve all artist records. Results are ordered by created_at descending to show newest artists first.
+// Nullable columns (musicbrainz_id, image_url, submitted_by) are scanned into pointer types (*string)
+// and omitted from JSON responses if NULL per the struct tag annotations.
+//
+// Response:
+// - 200 OK: Query successful; returns an array of Artist models (empty array if no artists exist)
+// - 500 Internal Server Error: Database error (connection, query failure, etc.)
+func GetAllArtists(db *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Initialize a slice to hold all artist records from the database.
+		// Using make with zero length and capacity allows dynamic growth as rows are scanned.
+		var artists []models.Artist
+
+		// Execute a multi-row SELECT query to retrieve all artists, ordered by creation timestamp.
+		// Query() returns a Rows iterator that must be explicitly iterated with Next() calls.
+		// Compared to QueryRow, Query() is optimized for variable-length result sets.
+		rows, err := db.Query(
+			context.Background(),
+			`SELECT id, name, musicbrainz_id, image_url, submitted_by, created_at
+			 FROM artists
+			 ORDER BY created_at DESC`,
+		)
+		if err != nil {
+			// Query errors indicate database connectivity or syntax issues (this should not happen in production).
+			// Return 500 and log the error for operational troubleshooting.
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query artists"})
+			return
+		}
+		// Defer ensures the result iterator is properly closed and any connection resources are released.
+		// Failure to close rows can leak server-side cursor resources over time.
+		defer rows.Close()
+
+		// Iterate over all result rows using the Rows iterator.
+		// Next() advances the iterator; it returns false when all rows have been consumed.
+		for rows.Next() {
+			var artist models.Artist
+			var musicBrainzID, imageURL, submittedBy *string
+
+			// Scan the current row's values into Go variables, same pattern as GetArtist single-row queries.
+			// Pointers allow NULL values to be represented as nil; scalar fields get zero values if NULL.
+			err := rows.Scan(
+				&artist.ID,
+				&artist.Name,
+				&musicBrainzID,
+				&imageURL,
+				&submittedBy,
+				&artist.CreatedAt,
+			)
+			if err != nil {
+				// Scan errors indicate type mismatches or corrupted data and should trigger a 500 response.
+				// In production, log this error with row information for debugging.
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scan artist row"})
+				return
+			}
+
+			// Dereference nullable pointers and assign to the model, using the same NULL-handling pattern
+			// as GetArtist to distinguish between unset fields (NULL) and default/empty values ("").
+			if musicBrainzID != nil {
+				artist.MusicBrainzID = *musicBrainzID
+			}
+			if imageURL != nil {
+				artist.ImageURL = *imageURL
+			}
+			if submittedBy != nil {
+				artist.SubmittedBy = *submittedBy
+			}
+
+			// Append the populated artist to the result slice.
+			// Go's slice append operation automatically handles growth and reallocation.
+			artists = append(artists, artist)
+		}
+
+		// Check the Rows iterator error status after the loop completes.
+		// This catches any errors that occurred during iteration but were not raised in Next().
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error iterating artists"})
+			return
+		}
+
+		// If no artists exist, artists remains as a nil slice or empty slice.
+		// JSON encoding treats both as empty arrays: [], presenting a consistent API contract.
+		// Initialize to empty slice explicitly to ensure non-nil JSON output for tool consistency.
+		if artists == nil {
+			artists = []models.Artist{}
+		}
+
+		// Marshal the artists slice to JSON and return HTTP 200 OK with the array.
+		// Gin's JSON() method handles encoding; the Content-Type is automatically set to application/json.
+		c.JSON(http.StatusOK, artists)
+	}
+}

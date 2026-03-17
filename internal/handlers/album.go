@@ -235,3 +235,137 @@ func GetAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, album)
 	}
 }
+
+// GetAllAlbums handles GET /api/albums requests to retrieve all album records with their associated artists.
+// This endpoint is useful for populating album directories, galleries, or performing metadata analysis.
+// Each album in the result includes a populated Artists slice with all linked artist records.
+//
+// SQL Operations:
+//
+//  1. Fetches all albums: SELECT id, title, release_year, submitted_by, created_at FROM albums
+//     Ordered by created_at DESC to show newest albums first.
+//
+//  2. For each album, fetches associated artists via INNER JOIN (same as GetAlbum):
+//     SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at
+//     FROM artists a
+//     INNER JOIN album_artists aa ON aa.artist_id = a.id
+//     WHERE aa.album_id = $1
+//
+// This implementation retrieves all albums first, then queries artists for each album.
+// In future optimizations, a single SQL query with grouping could reduce round-trips.
+//
+// Response:
+// - 200 OK: Query successful; returns array of Album models, each with populated Artists
+// - 500 Internal Server Error: Database error (connection, query failure, etc.)
+func GetAllAlbums(db *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Execute multi-row SELECT to fetch all albums, ordered by creation date descending.
+		// Query() returns a Rows iterator for variable-length result sets.
+		albumRows, err := db.Query(
+			context.Background(),
+			`SELECT id, title, release_year, submitted_by, created_at
+			 FROM albums
+			 ORDER BY created_at DESC`,
+		)
+		if err != nil {
+			// Query errors indicate database connectivity or syntax issues.
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query albums"})
+			return
+		}
+		// Always defer rows.Close() to release database resources and prevent connection pool exhaustion.
+		defer albumRows.Close()
+
+		// Initialize slice to accumulate albums from query results.
+		var albums []models.Album
+
+		// Iterate over each album row using albumRows.Next().
+		// This loop processes all albums sequentially from the database result set.
+		for albumRows.Next() {
+			var album models.Album
+			var submittedBy *string
+
+			// Scan the current album row into variables.
+			if err := albumRows.Scan(
+				&album.ID, &album.Title, &album.ReleaseYear, &submittedBy, &album.CreatedAt,
+			); err != nil {
+				// Scan errors should trigger a 500 response; abort the operation.
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scan album row"})
+				return
+			}
+
+			// Dereference nullable submittedBy pointer.
+			if submittedBy != nil {
+				album.SubmittedBy = *submittedBy
+			}
+
+			// Fetch artists associated with this specific album using the same INNER JOIN pattern as GetAlbum.
+			// This requires a separate database round-trip per album; see comments in GetAlbum for join details.
+			artistRows, err := db.Query(
+				context.Background(),
+				`SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at
+				 FROM artists a
+				 INNER JOIN album_artists aa ON aa.artist_id = a.id
+				 WHERE aa.album_id = $1`,
+				album.ID,
+			)
+			if err != nil {
+				// Artist query failure should not abort all album retrieval; log and continue with empty artists.
+				// In production, log this error with the album ID for debugging.
+				artistRows = nil
+			} else {
+				// Initialize artists slice for this album.
+				var artists []models.Artist
+
+				// Iterate over artist rows for this specific album.
+				for artistRows.Next() {
+					var artist models.Artist
+					var mbID, imgURL, subBy *string
+
+					if err := artistRows.Scan(
+						&artist.ID, &artist.Name, &mbID, &imgURL, &subBy, &artist.CreatedAt,
+					); err != nil {
+						// Skip rows with scan errors; continue processing remaining artist rows.
+						continue
+					}
+
+					// Dereference nullable pointers for optional artist fields.
+					if mbID != nil {
+						artist.MusicBrainzID = *mbID
+					}
+					if imgURL != nil {
+						artist.ImageURL = *imgURL
+					}
+					if subBy != nil {
+						artist.SubmittedBy = *subBy
+					}
+
+					// Append the populated artist to this album's artists slice.
+					artists = append(artists, artist)
+				}
+
+				// Assign the populated artists slice to the album model.
+				album.Artists = artists
+				// Close the artist rows iterator to release database resources.
+				artistRows.Close()
+			}
+
+			// Append the album (with or without artists) to the result slice.
+			albums = append(albums, album)
+		}
+
+		// Check for errors that occurred during row iteration.
+		if err := albumRows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error iterating albums"})
+			return
+		}
+
+		// Ensure non-nil JSON output: initialize to empty slice if no albums exist.
+		// This provides a consistent API contract: empty results are always [].
+		if albums == nil {
+			albums = []models.Album{}
+		}
+
+		// Marshal the albums slice with populated artists to JSON and return HTTP 200 OK.
+		c.JSON(http.StatusOK, albums)
+	}
+}
