@@ -78,21 +78,25 @@ func main() {
 	// User endpoints for authentication and user profile management.
 	r.POST("/api/users", handlers.CreateUser(database.DB)) // Create new user from auth provider UID
 	r.GET("/api/users/:id", handlers.GetUser(database.DB)) // Retrieve user profile by ID
+	r.GET("/api/users", handlers.GetAllUsers(database.DB)) // Retrieve all users
 
 	// ── Artists ───────────────────────────────────────────
 	// Artist CRUD endpoints for managing music artists.
 	r.POST("/api/artists", handlers.CreateArtist(database.DB)) // Create new artist record
 	r.GET("/api/artists/:id", handlers.GetArtist(database.DB)) // Retrieve artist by ID
+	r.GET("/api/artists", handlers.GetAllArtists(database.DB)) // Retrieve all artists
 
 	// ── Albums ────────────────────────────────────────────
 	// Album CRUD endpoints for managing music albums and their artist associations.
 	r.POST("/api/albums", handlers.CreateAlbum(database.DB)) // Create new album with artists
 	r.GET("/api/albums/:id", handlers.GetAlbum(database.DB)) // Retrieve album with populated artists
+	r.GET("/api/albums", handlers.GetAllAlbums(database.DB)) // Retrieve all albums with artists
 
 	// ── Artworks ──────────────────────────────────────────
 	// Artwork submission and retrieval endpoints for album cover images and promotional images.
 	r.POST("/api/albums/:id/artworks", handlers.CreateArtwork(database.DB))     // Submit new artwork for album
 	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(database.DB)) // Retrieve artworks with filtering
+	r.GET("/api/artworks", handlers.GetAllArtworks(database.DB))                 // Retrieve all artworks with filtering
 
 	// Log server startup message for operational visibility.
 	// Indicates that the server is ready to accept requests.

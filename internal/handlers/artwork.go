@@ -238,3 +238,141 @@ func GetArtworksByAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 		c.JSON(http.StatusOK, artworks)
 	}
 }
+
+// GetAllArtworks handles GET /api/artworks requests to retrieve all artwork records from the database.
+// This endpoint returns all artwork across all albums with optional filtering and sorting.
+// Useful for administrative interfaces, approval dashboards, and comprehensive metadata audits.
+//
+// Supported query parameters:
+//   - status: Filter by approval_status ("pending", "approved", or "rejected")
+//   - official: If "true", return only official artwork (is_official = true)
+//   - sort: If "priority", sort by priority_score DESC; otherwise sort by created_at DESC
+//
+// SQL Operations:
+// Base query: SELECT id, album_id, source_id, image_url, thumbnail_url,
+//
+//	      is_official, submitted_by, approval_status, priority_score, created_at
+//	FROM artworks
+//
+// Dynamic WHERE clauses are appended based on query parameters:
+// - status filter: WHERE approval_status = $1 (parameterized to prevent SQL injection)
+// - official filter: WHERE is_official = true
+//
+// Sorting:
+// - If sort=priority: ORDER BY priority_score DESC (highest priority first)
+// - Otherwise: ORDER BY created_at DESC (newest first)
+//
+// Nullable columns are scanned into pointer types; NULL values are omitted from JSON responses.
+// If no artworks match the query criteria, returns an empty array (never null).
+//
+// Response:
+// - 200 OK: Returns artworks array (may be empty if no matches or no artworks exist)
+// - 500 Internal Server Error: Database error (connection, query failure, etc.)
+func GetAllArtworks(db *pgxpool.Pool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// --- Build query dynamically based on filters ---
+		// Start with a base SELECT statement that retrieves all artworks.
+		// This pattern supports flexible filtering without code duplication across handlers.
+		query := `SELECT id, album_id, source_id, image_url, thumbnail_url,
+		                 is_official, submitted_by, approval_status, priority_score, created_at
+		          FROM artworks
+		          WHERE 1=1`
+		// Initialize parameter list with no base parameters (unlike GetArtworksByAlbum).
+		// Since we're not filtering by album_id, the first dynamic parameter will be $1.
+		args := []any{}
+		// Track the next parameter index for adding dynamic WHERE clauses.
+		argIdx := 1
+
+		// Parse the optional 'status' query parameter (e.g., ?status=approved).
+		// This filters all artworks by approval status across all albums.
+		if status := c.Query("status"); status != "" {
+			// Append a WHERE clause that uses the next available parameter index.
+			// Using fmt.Sprintf with $N placeholders ensures proper parameter binding.
+			query += fmt.Sprintf(" AND approval_status = $%d", argIdx)
+			// Append the status value to the args list in the same order as parameters in query.
+			args = append(args, status)
+			// Increment argIdx for the next parameter if additional filters are added.
+			argIdx++
+		}
+
+		// Parse the optional 'official' query parameter (e.g., ?official=true).
+		// This boolean filter returns only officially licensed artwork.
+		if c.Query("official") == "true" {
+			// This WHERE clause uses a literal true value, not a parameter.
+			// Since we control the literal "true" string, SQL injection is not a concern.
+			query += " AND is_official = true"
+		}
+
+		// Parse the optional 'sort' query parameter (e.g., ?sort=priority).
+		// Sorting determines the order of results across all artworks.
+		if c.Query("sort") == "priority" {
+			// Sort by priority_score descending (highest priority first).
+			// This allows administrators to quickly see the most important artworks.
+			query += " ORDER BY priority_score DESC"
+		} else {
+			// Default: sort by created_at descending (newest first).
+			// This provides a sensible chronological ordering of all submissions.
+			query += " ORDER BY created_at DESC"
+		}
+
+		// Execute the dynamically constructed query with all compiled parameters.
+		// Query() returns iterator for multiple rows; args... unpacks the slice as individual arguments.
+		rows, err := db.Query(context.Background(), query, args...)
+		if err != nil {
+			// Query errors indicate database connectivity, syntax errors, or parameter type mismatches.
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch artworks"})
+			return
+		}
+		// Defer rows.Close() to release the database cursor and return connection to the pool.
+		defer rows.Close()
+
+		// Initialize artwork slice to accumulate results from all albums.
+		var artworks []models.Artwork
+		// Iterate over all result rows.
+		for rows.Next() {
+			var aw models.Artwork
+			// Nullable pointer variables for optional columns.
+			var sourceID, thumbnailURL, submittedBy *string
+
+			// Scan the current row into the artwork struct and nullable pointers.
+			// Column order must match the SELECT clause order.
+			if err := rows.Scan(
+				&aw.ID, &aw.AlbumID, &sourceID, &aw.ImageURL, &thumbnailURL,
+				&aw.IsOfficial, &submittedBy, &aw.ApprovalStatus, &aw.PriorityScore, &aw.CreatedAt,
+			); err != nil {
+				// Row scan errors are silently skipped; iteration continues with next row.
+				// In production, log these errors with row context for visibility into data issues.
+				continue
+			}
+			// Dereference nullable pointers and populate the artwork model.
+			if sourceID != nil {
+				aw.SourceID = *sourceID
+			}
+			if thumbnailURL != nil {
+				aw.ThumbnailURL = *thumbnailURL
+			}
+			if submittedBy != nil {
+				aw.SubmittedBy = *submittedBy
+			}
+			// Append the populated artwork to the result slice.
+			artworks = append(artworks, aw)
+		}
+
+		// Check for errors that occurred during iteration.
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "error iterating artworks"})
+			return
+		}
+
+		// Ensure the response is a non-nil empty array rather than nil if no artworks exist or match.
+		// JSON convention: null implies missing/unset, [] implies empty collection.
+		// Explicitly setting a non-nil empty slice ensures consistent API behavior for all clients.
+		if artworks == nil {
+			artworks = []models.Artwork{}
+		}
+
+		// Marshal the artworks slice to JSON and return HTTP 200 OK.
+		// The slice may be empty if no artworks match the filter criteria or exist in the database.
+		c.JSON(http.StatusOK, artworks)
+	}
+}
