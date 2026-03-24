@@ -1,10 +1,4 @@
-Phase 1 — Core CRUD -- done
-
-Create / Get user
-Create / Get artist
-Create / Get album (with multiple artists via transaction)
-Submit / Get artworks for an album (with filters + sorting)
-
+gi
 
 Phase 2 — Moderation
 

@@ -113,6 +113,8 @@ Content-Type: application/json
   "submitted_by": "user_001"
 }
 
+# <<<<< Ported to postman upto this point>>>>>
+
 ---
 
 ### 11. Create Album — multiple artists (collaboration)

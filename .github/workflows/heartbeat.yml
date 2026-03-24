@@ -1,0 +1,17 @@
+name: Supabase Keep-Alive HeartBeat
+
+on:
+  schedule:
+    # Runs at 00:00 every 6th day
+    - cron: '0 0 */6 * *'
+  workflow_dispatch: # Allows manual triggering for testing
+
+jobs:
+  ping-db:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          psql "$DB_URL" -c "SELECT 1;"
