@@ -96,7 +96,11 @@ func main() {
 	// Artwork submission and retrieval endpoints for album cover images and promotional images.
 	r.POST("/api/albums/:id/artworks", handlers.CreateArtwork(database.DB))     // Submit new artwork for album
 	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(database.DB)) // Retrieve artworks with filtering
-	r.GET("/api/artworks", handlers.GetAllArtworks(database.DB))                 // Retrieve all artworks with filtering
+	r.GET("/api/artworks", handlers.GetAllArtworks(database.DB))                // Retrieve all artworks with filtering
+
+	// ── Moderation (Phase 2) ──────────────────────────────
+	r.PATCH("/api/artworks/:id/approve", handlers.ApproveArtwork(database.DB))
+	r.PATCH("/api/artworks/:id/reject", handlers.RejectArtwork(database.DB))
 
 	// Log server startup message for operational visibility.
 	// Indicates that the server is ready to accept requests.
