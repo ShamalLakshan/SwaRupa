@@ -2,8 +2,8 @@ name: Supabase Keep-Alive HeartBeat
 
 on:
   schedule:
-    # Runs at 00:00 every 6th day
-    - cron: '0 0 */6 * *'
+    # Runs at 00:00 every 3rd day
+    - cron: '0 0 */3 * *'
   workflow_dispatch: # Allows manual triggering for testing
 
 jobs:
