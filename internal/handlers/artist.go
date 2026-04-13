@@ -19,14 +19,14 @@ import (
 //
 //	{
 //	  "name": "Artist Name",
-//	  "musicbrainz_id": "mbz-uuid" (optional),
+//	  "artist_bio": "mbz-uuid" (optional),
 //	  "image_url": "https://example.com/image.jpg" (optional),
 //	  "submitted_by": "user-id" (optional)
 //	}
 //
 // SQL Operation:
 // Generates a UUID v4 (RFC 4122) for the new artist record and executes:
-// INSERT INTO artists (id, name, musicbrainz_id, image_url, submitted_by) VALUES ($1, $2, $3, $4, $5)
+// INSERT INTO artists (id, name, artist_bio, image_url, submitted_by) VALUES ($1, $2, $3, $4, $5)
 // The optional fields are normalized through nullableString(), converting empty strings to SQL NULL
 // for proper database semantics. This ensures nullable TEXT columns store NULL rather than empty strings.
 // All values are parameterized to prevent SQL injection attacks.
@@ -42,7 +42,7 @@ func CreateArtist(db *pgxpool.Pool) gin.HandlerFunc {
 		// JSON tags establish bidirectional mapping between Go struct fields and JSON keys.
 		var req struct {
 			Name          string `json:"name"           binding:"required"`
-			MusicBrainzID string `json:"musicbrainz_id"`
+			MusicBrainzID string `json:"artist_bio"`
 			ImageURL      string `json:"image_url"`
 			SubmittedBy   string `json:"submitted_by"`
 		}
@@ -67,7 +67,7 @@ func CreateArtist(db *pgxpool.Pool) gin.HandlerFunc {
 		// The pgx driver automatically handles type conversion and encoding for PostgreSQL protocol.
 		_, err := db.Exec(
 			context.Background(),
-			`INSERT INTO artists (id, name, musicbrainz_id, image_url, submitted_by)
+			`INSERT INTO artists (id, name, artist_bio, image_url, submitted_by)
 			 VALUES ($1, $2, $3, $4, $5)`,
 			id, req.Name, nullableString(req.MusicBrainzID), nullableString(req.ImageURL), nullableString(req.SubmittedBy),
 		)
@@ -97,9 +97,9 @@ func CreateArtist(db *pgxpool.Pool) gin.HandlerFunc {
 // The :id path parameter is the artist's UUID as returned from CreateArtist or stored in the database.
 //
 // SQL Operation:
-// Executes SELECT id, name, musicbrainz_id, image_url, submitted_by, created_at FROM artists WHERE id = $1
+// Executes SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists WHERE id = $1
 // using an indexed primary key lookup for O(1) retrieval performance.
-// Nullable columns (musicbrainz_id, image_url, submitted_by) are scanned into pointer types (*string).
+// Nullable columns (artist_bio, image_url, submitted_by) are scanned into pointer types (*string).
 // If a NULL value is encountered in the database, the pointer is set to nil and the field is omitted
 // from the JSON response due to the omitempty struct tag annotation.
 //
@@ -124,7 +124,7 @@ func GetArtist(db *pgxpool.Pool) gin.HandlerFunc {
 		// Parameterized queries ($1) prevent SQL injection by escaping special characters.
 		err := db.QueryRow(
 			context.Background(),
-			`SELECT id, name, musicbrainz_id, image_url, submitted_by, created_at
+			`SELECT id, name, artist_bio, image_url, submitted_by, created_at
 			 FROM artists WHERE id = $1`,
 			id,
 		// Scan maps query results to destination variables in the same column order as the SELECT clause.
@@ -170,9 +170,9 @@ func GetArtist(db *pgxpool.Pool) gin.HandlerFunc {
 // This endpoint is useful for populating artist directories, dropdowns, or full metadata exports.
 //
 // SQL Operation:
-// Executes SELECT id, name, musicbrainz_id, image_url, submitted_by, created_at FROM artists
+// Executes SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists
 // to retrieve all artist records. Results are ordered by created_at descending to show newest artists first.
-// Nullable columns (musicbrainz_id, image_url, submitted_by) are scanned into pointer types (*string)
+// Nullable columns (artist_bio, image_url, submitted_by) are scanned into pointer types (*string)
 // and omitted from JSON responses if NULL per the struct tag annotations.
 //
 // Response:
@@ -189,7 +189,7 @@ func GetAllArtists(db *pgxpool.Pool) gin.HandlerFunc {
 		// Compared to QueryRow, Query() is optimized for variable-length result sets.
 		rows, err := db.Query(
 			context.Background(),
-			`SELECT id, name, musicbrainz_id, image_url, submitted_by, created_at
+			`SELECT id, name, artist_bio, image_url, submitted_by, created_at
 			 FROM artists
 			 ORDER BY created_at DESC`,
 		)

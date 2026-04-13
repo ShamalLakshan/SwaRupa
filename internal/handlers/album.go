@@ -134,14 +134,14 @@ func CreateAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 //     This is an indexed primary key lookup with O(1) retrieval complexity.
 //
 //  2. Fetches associated artists via INNER JOIN:
-//     SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at
+//     SELECT a.id, a.name, a.artist_bio, a.image_url, a.submitted_by, a.created_at
 //     FROM artists a
 //     INNER JOIN album_artists aa ON aa.artist_id = a.id
 //     WHERE aa.album_id = $1
 //     This query joins the artists table with the album_artists junction table, returning only
 //     artists explicitly linked to the specified album. The INNER JOIN excludes unassociated artists.
 //
-// Nullable columns (submitted_by, musicbrainz_id, etc.) are scanned into pointer types.
+// Nullable columns (submitted_by, artist_bio, etc.) are scanned into pointer types.
 // If NULL in the database, the field is omitted from the JSON response.
 //
 // Response:
@@ -179,7 +179,7 @@ func GetAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 		// The INNER JOIN ensures only artists explicitly linked to this album are returned.
 		rows, err := db.Query(
 			context.Background(),
-			`SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at
+			`SELECT a.id, a.name, a.artist_bio, a.image_url, a.submitted_by, a.created_at
 			 FROM artists a
 			 INNER JOIN album_artists aa ON aa.artist_id = a.id
 			 WHERE aa.album_id = $1`,
@@ -246,7 +246,7 @@ func GetAlbum(db *pgxpool.Pool) gin.HandlerFunc {
 //     Ordered by created_at DESC to show newest albums first.
 //
 //  2. For each album, fetches associated artists via INNER JOIN (same as GetAlbum):
-//     SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at
+//     SELECT a.id, a.name, a.artist_bio, a.image_url, a.submitted_by, a.created_at
 //     FROM artists a
 //     INNER JOIN album_artists aa ON aa.artist_id = a.id
 //     WHERE aa.album_id = $1
@@ -302,7 +302,7 @@ func GetAllAlbums(db *pgxpool.Pool) gin.HandlerFunc {
 			// This requires a separate database round-trip per album; see comments in GetAlbum for join details.
 			artistRows, err := db.Query(
 				context.Background(),
-				`SELECT a.id, a.name, a.musicbrainz_id, a.image_url, a.submitted_by, a.created_at
+				`SELECT a.id, a.name, a.artist_bio, a.image_url, a.submitted_by, a.created_at
 				 FROM artists a
 				 INNER JOIN album_artists aa ON aa.artist_id = a.id
 				 WHERE aa.album_id = $1`,
