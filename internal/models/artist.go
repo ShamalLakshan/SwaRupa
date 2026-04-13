@@ -17,11 +17,11 @@ type Artist struct {
 	// unique where possible, though duplicates are permitted to support homonyms and variant spellings.
 	Name string `json:"name"`
 
-	// MusicBrainzID is an optional external identifier from MusicBrainz, a community-maintained
+	// ArtistBio is an optional external identifier from MusicBrainz, a community-maintained
 	// music database. This identifier enables integration with MusicBrainz APIs and helps link
 	// artist records across the SwaRupa system and external music metadata services.
 	// See https://musicbrainz.org/ for more information.
-	MusicBrainzID string `json:"artist_bio,omitempty"`
+	ArtistBio string `json:"artist_bio,omitempty"`
 
 	// ImageURL is an optional HTTP(S) URL pointing to a profile or promotional image of the artist.
 	// The field may reference images hosted on Content Delivery Networks (CDNs) or dedicated cloud storage.

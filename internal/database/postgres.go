@@ -54,10 +54,6 @@ func Connect() {
 		log.Fatal("DATABASE_URL is not set")
 	}
 
-	// Log the connection string for debugging purposes.
-	// Note: In production, mask credentials from logs to prevent accidental secrets exposure.
-	log.Println("DATABASE_URL:", dsn)
-
 	// Parse the PostgreSQL connection string into a pgxpool.Config object.
 	// pgxpool.ParseConfig handles URL parsing, credential extraction, and TLS configuration.
 	// The config can then be customized before creating the actual connection pool.

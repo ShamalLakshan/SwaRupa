@@ -27,8 +27,8 @@ POST http://localhost:8080/api/users
 Content-Type: application/json
 
 {
-  "id": "user_001",
-  "display_name": "patrick"
+  "id": "user_000",
+  "display_name": "System"
 }
 
 ---

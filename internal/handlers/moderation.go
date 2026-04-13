@@ -4,20 +4,20 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/ShamalLakshan/SwaRupa/internal/services"
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// moderateArtwork is the shared logic for ApproveArtwork and RejectArtwork.
+// moderate Artwork is the shared logic for ApproveArtwork and RejectArtwork.
 //
 // Flow:
 // 1. Extract artwork ID from URL path
 // 2. Extract requested_by from request body (will be replaced by Supabase JWT in Phase 5)
-// 3. Look up the user's role in the database
+// 3. Check if the user is an admin using UserService
 // 4. Reject with 403 if not admin
-// 5. Update approval_status on the artwork record
+// 5. Update approval_status on the artwork record using ArtworkService
 // 6. Return 404 if the artwork ID does not exist
-func moderateArtwork(db *pgxpool.Pool, status string) gin.HandlerFunc {
+func moderateArtworkWithService(artworkService *services.ArtworkService, userService *services.UserService, status string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		artworkID := c.Param("id")
 
@@ -33,39 +33,24 @@ func moderateArtwork(db *pgxpool.Pool, status string) gin.HandlerFunc {
 			return
 		}
 
-		// Look up the requesting user's role.
+		// Check the requesting user's role using UserService.
 		// Only users with role = "admin" are permitted to approve or reject artworks.
-		var role string
-		err := db.QueryRow(
-			context.Background(),
-			`SELECT role FROM users WHERE id = $1`,
-			req.RequestedBy,
-		).Scan(&role)
+		isAdmin, err := userService.IsAdmin(context.Background(), req.RequestedBy)
 		if err != nil {
 			// User not found in the database — reject the request.
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 			return
 		}
 
-		if role != "admin" {
+		if !isAdmin {
 			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can moderate artworks"})
 			return
 		}
 
-		// Update the artwork's approval_status to the target status (approved or rejected).
-		// RowsAffected() is checked to detect the case where the artwork ID does not exist.
-		result, err := db.Exec(
-			context.Background(),
-			`UPDATE artworks SET approval_status = $1 WHERE id = $2`,
-			status, artworkID,
-		)
+		// Update the artwork's approval_status using ArtworkService.
+		err = artworkService.UpdateApprovalStatus(context.Background(), artworkID, status)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update artwork status"})
-			return
-		}
-
-		if result.RowsAffected() == 0 {
-			c.JSON(http.StatusNotFound, gin.H{"error": "artwork not found"})
 			return
 		}
 
@@ -78,12 +63,12 @@ func moderateArtwork(db *pgxpool.Pool, status string) gin.HandlerFunc {
 
 // ApproveArtwork handles PATCH /api/artworks/:id/approve
 // Sets the artwork's approval_status to "approved". Admin only.
-func ApproveArtwork(db *pgxpool.Pool) gin.HandlerFunc {
-	return moderateArtwork(db, "approved")
+func ApproveArtwork(artworkService *services.ArtworkService, userService *services.UserService) gin.HandlerFunc {
+	return moderateArtworkWithService(artworkService, userService, "approved")
 }
 
 // RejectArtwork handles PATCH /api/artworks/:id/reject
 // Sets the artwork's approval_status to "rejected". Admin only.
-func RejectArtwork(db *pgxpool.Pool) gin.HandlerFunc {
-	return moderateArtwork(db, "rejected")
+func RejectArtwork(artworkService *services.ArtworkService, userService *services.UserService) gin.HandlerFunc {
+	return moderateArtworkWithService(artworkService, userService, "rejected")
 }
