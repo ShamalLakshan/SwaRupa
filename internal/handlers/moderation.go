@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// moderate Artwork is the shared logic for ApproveArtwork and RejectArtwork.
+// moderateArtwork is the shared logic for ApproveArtwork and RejectArtwork.
 //
 // Flow:
 // 1. Extract artwork ID from URL path
@@ -19,7 +19,7 @@ import (
 // 6. Return 404 if the artwork ID does not exist
 func moderateArtworkWithService(artworkService *services.ArtworkService, userService *services.UserService, status string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		artworkID := c.Param("id")
+		artworkID := c.Param("artwork_id")
 
 		// requested_by is the user attempting the moderation action.
 		// In Phase 5, this will be extracted automatically from the Supabase Auth JWT token
@@ -61,13 +61,13 @@ func moderateArtworkWithService(artworkService *services.ArtworkService, userSer
 	}
 }
 
-// ApproveArtwork handles PATCH /api/artworks/:id/approve
+// ApproveArtwork handles PATCH /api/artworks/:artwork_id/approve
 // Sets the artwork's approval_status to "approved". Admin only.
 func ApproveArtwork(artworkService *services.ArtworkService, userService *services.UserService) gin.HandlerFunc {
 	return moderateArtworkWithService(artworkService, userService, "approved")
 }
 
-// RejectArtwork handles PATCH /api/artworks/:id/reject
+// RejectArtwork handles PATCH /api/artworks/:artwork_id/reject
 // Sets the artwork's approval_status to "rejected". Admin only.
 func RejectArtwork(artworkService *services.ArtworkService, userService *services.UserService) gin.HandlerFunc {
 	return moderateArtworkWithService(artworkService, userService, "rejected")

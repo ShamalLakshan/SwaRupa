@@ -15,13 +15,13 @@ func CreateArtwork(artworkService *services.ArtworkService) gin.HandlerFunc {
 		albumID := c.Param("id")
 
 		var req struct {
-			SourceName       string  `json:"source_name" binding:"required"`
-			SourcePage       string  `json:"source_page"`
-			ImageURL         string  `json:"image_url" binding:"required"`
-			SourceType       string  `json:"source_type"`
-			ConfidenceScore  float64 `json:"confidence_score"`
-			QualityScore     float64 `json:"quality_score"`
-			DiscoveredBy     string  `json:"discovered_by"`
+			SourceName      string  `json:"source_name" binding:"required"`
+			SourcePage      string  `json:"source_page"`
+			ImageURL        string  `json:"image_url" binding:"required"`
+			SourceType      string  `json:"source_type"`
+			ConfidenceScore float64 `json:"confidence_score"`
+			QualityScore    float64 `json:"quality_score"`
+			DiscoveredBy    string  `json:"discovered_by"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -157,5 +157,102 @@ func GetAllArtworks(artworkService *services.ArtworkService) gin.HandlerFunc {
 
 		// Marshal the artworks slice to JSON and return HTTP 200 OK.
 		c.JSON(http.StatusOK, artworks)
+	}
+}
+
+// AddArtworkSource handles POST /api/artworks/:artwork_id/sources
+// Adds a new source/location for an existing artwork
+func AddArtworkSource(artworkService *services.ArtworkService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		artworkID := c.Param("artwork_id")
+
+		var req struct {
+			SourceName string `json:"source_name" binding:"required"`
+			SourcePage string `json:"source_page"`
+			ImageURL   string `json:"image_url" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		source, err := artworkService.AddSource(c.Request.Context(), artworkID, req.SourceName, req.SourcePage, req.ImageURL)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusCreated, source)
+	}
+}
+
+// ListArtworkSources handles GET /api/artworks/:artwork_id/sources
+// Retrieves all sources for a specific artwork
+func ListArtworkSources(artworkService *services.ArtworkService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		artworkID := c.Param("artwork_id")
+
+		sources, err := artworkService.ListArtworkSources(c.Request.Context(), artworkID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch artwork sources"})
+			return
+		}
+
+		// Ensure the response is a non-nil empty array rather than nil if no sources exist
+		if sources == nil {
+			sources = []models.ArtworkSource{}
+		}
+
+		c.JSON(http.StatusOK, sources)
+	}
+}
+
+// UpdateArtworkSource handles PATCH /api/artworks/:artwork_id/sources/:source_id
+// Updates the confidence and quality scores for an artwork source
+func UpdateArtworkSource(artworkService *services.ArtworkService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sourceID := c.Param("source_id")
+
+		var req struct {
+			ConfidenceScore float64 `json:"confidence_score" binding:"required"`
+			QualityScore    float64 `json:"quality_score" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		err := artworkService.UpdateSourceScore(c.Request.Context(), sourceID, req.ConfidenceScore, req.QualityScore)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Fetch and return the updated source
+		updatedSource, err := artworkService.GetSourceByID(c.Request.Context(), sourceID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch updated source"})
+			return
+		}
+
+		c.JSON(http.StatusOK, updatedSource)
+	}
+}
+
+// DeleteArtworkSource handles DELETE /api/artworks/:artwork_id/sources/:source_id
+// Removes a source from an artwork
+func DeleteArtworkSource(artworkService *services.ArtworkService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		sourceID := c.Param("source_id")
+
+		err := artworkService.DeleteSource(c.Request.Context(), sourceID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "source deleted successfully"})
 	}
 }

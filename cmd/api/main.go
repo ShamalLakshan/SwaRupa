@@ -116,16 +116,16 @@ func main() {
 	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService)) // Retrieve artworks with filtering
 	r.GET("/api/artworks", handlers.GetAllArtworks(artworkService))                // Retrieve all artworks with filtering
 
-	// // ── Artwork Sources ───────────────────────────────────
-	// // Artwork source management endpoints for tracking and updating artwork metadata sources.
-	// r.POST("/api/artworks/:artwork_id/sources", handlers.AddArtworkSource(artworkService))                 // Add new source for artwork
-	// r.GET("/api/artworks/:artwork_id/sources", handlers.ListArtworkSources(artworkService))                // List all sources for artwork
-	// r.PATCH("/api/artworks/:artwork_id/sources/:source_id", handlers.UpdateArtworkSource(artworkService))  // Update source details
-	// r.DELETE("/api/artworks/:artwork_id/sources/:source_id", handlers.DeleteArtworkSource(artworkService)) // Remove source for artwork
+	// ── Artwork Sources ───────────────────────────────────
+	// Artwork source management endpoints for tracking and updating artwork metadata sources.
+	r.POST("/api/artworks/:artwork_id/sources", handlers.AddArtworkSource(artworkService))                 // Add new source for artwork
+	r.GET("/api/artworks/:artwork_id/sources", handlers.ListArtworkSources(artworkService))                // List all sources for artwork
+	r.PATCH("/api/artworks/:artwork_id/sources/:source_id", handlers.UpdateArtworkSource(artworkService))  // Update source details
+	r.DELETE("/api/artworks/:artwork_id/sources/:source_id", handlers.DeleteArtworkSource(artworkService)) // Remove source for artwork
 
 	// ── Moderation (Phase 2) ──────────────────────────────
-	r.PATCH("/api/artworks/:id/approve", handlers.ApproveArtwork(artworkService, userService))
-	r.PATCH("/api/artworks/:id/reject", handlers.RejectArtwork(artworkService, userService))
+	r.PATCH("/api/artworks/:artwork_id/approve", handlers.ApproveArtwork(artworkService, userService))
+	r.PATCH("/api/artworks/:artwork_id/reject", handlers.RejectArtwork(artworkService, userService))
 
 	// Log server startup message for operational visibility.
 	// Indicates that the server is ready to accept requests.
