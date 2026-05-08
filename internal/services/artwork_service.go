@@ -136,3 +136,10 @@ func (s *ArtworkService) UpdateApprovalStatus(ctx context.Context, artworkID, st
 	)
 	return err
 }
+
+// GetArtworksByAlbumWithPagination retrieves paginated artworks for an album with optional filtering.
+func (s *ArtworkService) GetArtworksByAlbumWithPagination(ctx context.Context, albumID, status string, onlyOfficial bool, sortByPriority bool, page, limit int) ([]models.Artwork, int64, error) {
+	page, limit = models.ValidatePaginationParams(page, limit)
+	offset := models.CalculateOffset(page, limit)
+	return database.GetArtworksByAlbumIDWithPagination(ctx, s.db, albumID, status, onlyOfficial, sortByPriority, limit, offset)
+}

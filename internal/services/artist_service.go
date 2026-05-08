@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 
+	"github.com/ShamalLakshan/SwaRupa/internal/database"
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -102,4 +103,18 @@ func (s *ArtistService) GetAllArtists(ctx context.Context) ([]models.Artist, err
 	}
 
 	return artists, nil
+}
+
+// GetAllArtistsWithPagination retrieves artists with pagination support.
+func (s *ArtistService) GetAllArtistsWithPagination(ctx context.Context, page, limit int) ([]models.Artist, int64, error) {
+	page, limit = models.ValidatePaginationParams(page, limit)
+	offset := models.CalculateOffset(page, limit)
+	return database.GetAllArtistsWithPagination(ctx, s.db, limit, offset)
+}
+
+// SearchArtistsByName performs fuzzy search on artist names.
+func (s *ArtistService) SearchArtistsByName(ctx context.Context, query string, page, limit int) ([]models.Artist, int64, error) {
+	page, limit = models.ValidatePaginationParams(page, limit)
+	offset := models.CalculateOffset(page, limit)
+	return database.SearchArtistsByName(ctx, s.db, query, limit, offset)
 }
