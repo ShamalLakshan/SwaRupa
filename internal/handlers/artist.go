@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/ShamalLakshan/SwaRupa/internal/services"
@@ -117,25 +118,43 @@ func GetArtist(artistService *services.ArtistService) gin.HandlerFunc {
 	}
 }
 
-// GetAllArtists handles GET /api/artists requests to retrieve all artist records from the database.
-// The endpoint returns a paginated or complete list of artists depending on query parameters.
+// GetAllArtists handles GET /api/artists requests to retrieve artist records from the database.
+// Supports pagination through query parameters: ?page=1&limit=20
 // This endpoint is useful for populating artist directories, dropdowns, or full metadata exports.
 //
+// Query Parameters:
+//   - page: Optional page number (default: 1)
+//   - limit: Optional results per page (default: 20, max: 100)
+//
 // Operation:
-// Calls ArtistService.GetAllArtists() which executes:
+// Calls ArtistService.GetAllArtistsWithPagination() which executes:
 // SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists
-// to retrieve all artist records. Results are ordered by created_at descending to show newest artists first.
+// with LIMIT and OFFSET to retrieve paginated results. Results are ordered by created_at descending.
 // Nullable columns (artist_bio, image_url, submitted_by) are scanned into pointer types (*string)
 // and omitted from JSON responses if NULL per the struct tag annotations.
 //
 // Response:
-// - 200 OK: Query successful; returns an array of Artist models (empty array if no artists exist)
+// - 200 OK: Query successful; returns paginated array of Artist models with metadata
 // - 500 Internal Server Error: Database error (connection, query failure, etc.)
 func GetAllArtists(artistService *services.ArtistService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Call the service to retrieve all artists.
-		// The service handles the database query and returns a properly formatted slice.
-		artists, err := artistService.GetAllArtists(context.Background())
+		// Parse pagination parameters from query string
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
+		// Call the service to retrieve paginated artists.
+		// The service handles validation, database query, and pagination logic.
+		artists, total, err := artistService.GetAllArtistsWithPagination(context.Background(), page, limit)
 		if err != nil {
 			// Query errors indicate database connectivity or syntax issues (this should not happen in production).
 			// Return 500 and log the error for operational troubleshooting.
@@ -150,8 +169,19 @@ func GetAllArtists(artistService *services.ArtistService) gin.HandlerFunc {
 			artists = []models.Artist{}
 		}
 
-		// Marshal the artists slice to JSON and return HTTP 200 OK with the array.
-		// Gin's JSON() method handles encoding; the Content-Type is automatically set to application/json.
-		c.JSON(http.StatusOK, artists)
+		// Build paginated response
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       artists,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		// Marshal the paginated response to JSON and return HTTP 200 OK.
+		c.JSON(http.StatusOK, response)
 	}
 }

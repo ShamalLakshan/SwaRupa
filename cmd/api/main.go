@@ -102,19 +102,24 @@ func main() {
 	// Artist CRUD endpoints for managing music artists.
 	r.POST("/api/artists", handlers.CreateArtist(artistService)) // Create new artist record
 	r.GET("/api/artists/:id", handlers.GetArtist(artistService)) // Retrieve artist by ID
-	r.GET("/api/artists", handlers.GetAllArtists(artistService)) // Retrieve all artists
+	r.GET("/api/artists", handlers.GetAllArtists(artistService)) // Retrieve all artists (paginated)
 
 	// ── Albums ────────────────────────────────────────────
 	// Album CRUD endpoints for managing music albums and their artist associations.
 	r.POST("/api/albums", handlers.CreateAlbum(albumService)) // Create new album with artists
 	r.GET("/api/albums/:id", handlers.GetAlbum(albumService)) // Retrieve album with populated artists
-	r.GET("/api/albums", handlers.GetAllAlbums(albumService)) // Retrieve all albums with artists
+	r.GET("/api/albums", handlers.GetAllAlbums(albumService)) // Retrieve all albums with artists (paginated)
 
 	// ── Artworks ──────────────────────────────────────────
 	// Artwork submission and retrieval endpoints for album cover images and promotional images.
 	r.POST("/api/albums/:id/artworks", handlers.CreateArtwork(artworkService))     // Submit new artwork for album
-	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService)) // Retrieve artworks with filtering
+	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService)) // Retrieve artworks with filtering and pagination
 	r.GET("/api/artworks", handlers.GetAllArtworks(artworkService))                // Retrieve all artworks with filtering
+
+	// ── Search (Phase 3) ───────────────────────────────────
+	// Full-text and fuzzy search endpoints using PostgreSQL pg_trgm trigram similarity.
+	r.GET("/search/artists", handlers.SearchArtists(artistService)) // Search artists by name with pagination
+	r.GET("/search/albums", handlers.SearchAlbums(albumService))    // Search albums by title with pagination
 
 	// ── Artwork Sources ───────────────────────────────────
 	// Artwork source management endpoints for tracking and updating artwork metadata sources.

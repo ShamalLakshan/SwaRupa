@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/ShamalLakshan/SwaRupa/internal/services"
@@ -120,16 +121,21 @@ func GetAlbum(albumService *services.AlbumService) gin.HandlerFunc {
 	}
 }
 
-// GetAllAlbums handles GET /api/albums requests to retrieve all album records with their associated artists.
+// GetAllAlbums handles GET /api/albums requests to retrieve album records with their associated artists.
+// Supports pagination through query parameters: ?page=1&limit=20
 // This endpoint is useful for populating album directories, galleries, or performing metadata analysis.
 // Each album in the result includes a populated Artists slice with all linked artist records.
 // The handler delegates data fetching to the AlbumService.
 //
-// Service Operations:
-// The AlbumService.GetAllAlbums() method:
+// Query Parameters:
+//   - page: Optional page number (default: 1)
+//   - limit: Optional results per page (default: 20, max: 100)
 //
-//  1. Fetches all albums: SELECT id, title, release_year, submitted_by, created_at FROM albums
-//     Ordered by created_at DESC to show newest albums first.
+// Service Operations:
+// The AlbumService.GetAllAlbumsWithPagination() method:
+//
+//  1. Fetches paginated albums: SELECT id, title, release_year, submitted_by, created_at FROM albums
+//     Ordered by created_at DESC to show newest albums first, with LIMIT and OFFSET for pagination.
 //
 //  2. For each album, fetches associated artists via INNER JOIN:
 //     SELECT a.id, a.name, a.artist_bio, a.image_url, a.submitted_by, a.created_at
@@ -137,17 +143,28 @@ func GetAlbum(albumService *services.AlbumService) gin.HandlerFunc {
 //     INNER JOIN album_artists aa ON aa.artist_id = a.id
 //     WHERE aa.album_id = $1
 //
-// This implementation retrieves all albums first, then queries artists for each album.
-// In future optimizations, a single SQL query with grouping could reduce round-trips.
-//
 // Response:
-// - 200 OK: Query successful; returns array of Album models, each with populated Artists
+// - 200 OK: Query successful; returns paginated array of Album models with metadata
 // - 500 Internal Server Error: Service error (connection, query failure, etc.)
 func GetAllAlbums(albumService *services.AlbumService) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Parse pagination parameters from query string
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
 		// Delegate album retrieval to the service layer.
-		// The service handles all database queries and artist association population.
-		albums, err := albumService.GetAllAlbums(context.Background())
+		// The service handles pagination validation, database queries, and artist association population.
+		albums, total, err := albumService.GetAllAlbumsWithPagination(context.Background(), page, limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve albums"})
 			return
@@ -159,7 +176,19 @@ func GetAllAlbums(albumService *services.AlbumService) gin.HandlerFunc {
 			albums = []models.Album{}
 		}
 
-		// Marshal the albums slice with populated artists to JSON and return HTTP 200 OK.
-		c.JSON(http.StatusOK, albums)
+		// Build paginated response
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       albums,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		// Marshal the paginated albums response to JSON and return HTTP 200 OK.
+		c.JSON(http.StatusOK, response)
 	}
 }

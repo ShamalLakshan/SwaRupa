@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 
+	"github.com/ShamalLakshan/SwaRupa/internal/database"
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -194,6 +195,20 @@ func (s *AlbumService) GetAllAlbums(ctx context.Context) ([]models.Album, error)
 	}
 
 	return albums, nil
+}
+
+// GetAllAlbumsWithPagination retrieves albums with pagination support and their associated artists.
+func (s *AlbumService) GetAllAlbumsWithPagination(ctx context.Context, page, limit int) ([]models.Album, int64, error) {
+	page, limit = models.ValidatePaginationParams(page, limit)
+	offset := models.CalculateOffset(page, limit)
+	return database.GetAllAlbumsWithPagination(ctx, s.db, limit, offset)
+}
+
+// SearchAlbumsByName performs fuzzy search on album titles.
+func (s *AlbumService) SearchAlbumsByName(ctx context.Context, query string, page, limit int) ([]models.Album, int64, error) {
+	page, limit = models.ValidatePaginationParams(page, limit)
+	offset := models.CalculateOffset(page, limit)
+	return database.SearchAlbumsByName(ctx, s.db, query, limit, offset)
 }
 
 // nullableString helper

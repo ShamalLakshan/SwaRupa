@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/ShamalLakshan/SwaRupa/internal/services"
@@ -51,12 +52,14 @@ func CreateArtwork(artworkService *services.ArtworkService) gin.HandlerFunc {
 }
 
 // GetArtworksByAlbum handles GET /api/albums/:id/artworks requests to retrieve artwork records
-// for a specific album with optional filtering and sorting.
+// for a specific album with optional filtering, sorting, and pagination.
 //
 // Supported query parameters:
 //   - status: Filter by approval_status ("pending", "approved", or "rejected")
 //   - official: If "true", return only official artwork (is_official = true)
 //   - sort: If "priority", sort by priority_score DESC; otherwise sort by created_at DESC
+//   - page: Optional page number (default: 1)
+//   - limit: Optional results per page (default: 20, max: 100)
 //
 // SQL Operations:
 // Base query constructs: SELECT id, album_id, source_id, image_url, thumbnail_url,
@@ -72,11 +75,12 @@ func CreateArtwork(artworkService *services.ArtworkService) gin.HandlerFunc {
 // - If sort=priority: ORDER BY priority_score DESC (highest priority first)
 // - Otherwise: ORDER BY created_at DESC (newest first)
 //
+// Pagination is applied with LIMIT and OFFSET.
 // Nullable columns are scanned into pointer types; NULL values are omitted from JSON responses.
 // If no artworks match the query criteria, returns an empty array (never null).
 //
 // Response:
-// - 200 OK: Returns artworks array (may be empty if no matches)
+// - 200 OK: Returns paginated artworks array with metadata
 // - 500 Internal Server Error: Service or database error
 func GetArtworksByAlbum(artworkService *services.ArtworkService) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -88,8 +92,22 @@ func GetArtworksByAlbum(artworkService *services.ArtworkService) gin.HandlerFunc
 		onlyOfficial := c.Query("official") == "true"
 		sortByPriority := c.Query("sort") == "priority"
 
-		// Call service method to get artworks with based on filters
-		artworks, err := artworkService.GetArtworksByAlbum(c.Request.Context(), albumID, status, onlyOfficial, sortByPriority)
+		// Parse pagination parameters from query string
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
+		// Call service method to get paginated artworks with filters
+		artworks, total, err := artworkService.GetArtworksByAlbumWithPagination(c.Request.Context(), albumID, status, onlyOfficial, sortByPriority, page, limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch artworks"})
 			return
@@ -101,8 +119,19 @@ func GetArtworksByAlbum(artworkService *services.ArtworkService) gin.HandlerFunc
 			artworks = []models.Artwork{}
 		}
 
-		// Marshal the artworks slice to JSON and return HTTP 200 OK.
-		c.JSON(http.StatusOK, artworks)
+		// Build paginated response
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       artworks,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		c.JSON(http.StatusOK, response)
 	}
 }
 
