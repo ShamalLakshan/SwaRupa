@@ -36,6 +36,7 @@ func CreateUser(svc *services.UserService) gin.HandlerFunc {
 		var req struct {
 			ID          string `json:"id"           binding:"required"`
 			DisplayName string `json:"display_name"`
+			Email       string `json:"email"`
 		}
 
 		// ShouldBindJSON unmarshals the HTTP request body into the req struct.
@@ -52,7 +53,7 @@ func CreateUser(svc *services.UserService) gin.HandlerFunc {
 		// Call the UserService to create or retrieve the user.
 		// The service handles database operations and returns a complete User model with server-generated timestamp.
 		// This ensures consistency with database-generated timestamps rather than client-side values.
-		user, err := svc.CreateUser(context.Background(), req.ID, req.DisplayName)
+		user, err := svc.CreateUser(context.Background(), req.ID, req.DisplayName, req.Email)
 		if err != nil {
 			// Database errors (connection failures, constraint violations, etc.) return 500.
 			// In production, consider logging the full error for debugging while returning generic message to clients.
@@ -125,5 +126,51 @@ func GetAllUsers(svc *services.UserService) gin.HandlerFunc {
 		// Marshal the users slice to JSON and return HTTP 200 OK.
 		// Gin's JSON() method handles encoding; Content-Type is automatically set to application/json.
 		c.JSON(http.StatusOK, users)
+	}
+}
+
+// LinkProvider handles POST /api/users/link-provider requests.
+// The caller must be authenticated; primary user comes from JWT context.
+// Request body expects a provider_user_id to merge into the authenticated account.
+func LinkProvider(svc *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req struct {
+			ProviderUserID string `json:"provider_user_id" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "provider_user_id is required"})
+			return
+		}
+
+		userIDVal, _ := c.Get("user_id")
+		primaryUserID, _ := userIDVal.(string)
+		if primaryUserID == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing authenticated user"})
+			return
+		}
+
+		err := svc.LinkProviderAccount(context.Background(), primaryUserID, req.ProviderUserID)
+		if err != nil {
+			if services.IsUserNotFoundError(err) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "user account not found"})
+				return
+			}
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		linkedUser, err := svc.GetUserByID(context.Background(), primaryUserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load linked user"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":         "provider account linked successfully",
+			"primary_user":    linkedUser,
+			"merged_user_id":  req.ProviderUserID,
+			"primary_user_id": primaryUserID,
+		})
 	}
 }

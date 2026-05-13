@@ -22,7 +22,6 @@ func CreateArtwork(artworkService *services.ArtworkService) gin.HandlerFunc {
 			SourceType      string  `json:"source_type"`
 			ConfidenceScore float64 `json:"confidence_score"`
 			QualityScore    float64 `json:"quality_score"`
-			DiscoveredBy    string  `json:"discovered_by"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,6 +32,10 @@ func CreateArtwork(artworkService *services.ArtworkService) gin.HandlerFunc {
 		// Determine isOfficial based on source type
 		isOfficial := req.SourceType == "official"
 
+		// Use authenticated user as discovered_by when available (Phase 5)
+		userID, _ := c.Get("user_id")
+		discoveredBy, _ := userID.(string)
+
 		artwork, err := artworkService.CreateArtworkWithSource(
 			c.Request.Context(),
 			albumID,
@@ -40,7 +43,7 @@ func CreateArtwork(artworkService *services.ArtworkService) gin.HandlerFunc {
 			req.SourceName,
 			req.SourcePage,
 			isOfficial,
-			req.DiscoveredBy,
+			discoveredBy,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

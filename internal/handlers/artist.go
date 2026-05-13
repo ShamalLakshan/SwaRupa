@@ -41,10 +41,9 @@ func CreateArtist(artistService *services.ArtistService) gin.HandlerFunc {
 		// binding:"required" enforces non-empty values; unmarshaling failures automatically return 400.
 		// JSON tags establish bidirectional mapping between Go struct fields and JSON keys.
 		var req struct {
-			Name        string `json:"name"           binding:"required"`
-			ArtistBio   string `json:"artist_bio"`
-			ImageURL    string `json:"image_url"`
-			SubmittedBy string `json:"submitted_by"`
+			Name      string `json:"name"           binding:"required"`
+			ArtistBio string `json:"artist_bio"`
+			ImageURL  string `json:"image_url"`
 		}
 
 		// Unmarshal and validate the JSON request body.
@@ -57,12 +56,16 @@ func CreateArtist(artistService *services.ArtistService) gin.HandlerFunc {
 
 		// Call the service to create the artist.
 		// The service handles UUID generation, database insertion, and returning the created artist.
+		// Submitted_by will be populated from the authenticated token (Phase 5)
+		userID, _ := c.Get("user_id")
+		submittedBy, _ := userID.(string)
+
 		artist, err := artistService.CreateArtist(
 			context.Background(),
 			req.Name,
 			req.ArtistBio,
 			req.ImageURL,
-			req.SubmittedBy,
+			submittedBy,
 		)
 		if err != nil {
 			// Database errors include connection failures, constraint violations (e.g., unique constraints),

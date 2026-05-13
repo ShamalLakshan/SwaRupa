@@ -24,18 +24,13 @@ func moderateArtworkWithService(artworkService *services.ArtworkService, userSer
 		// requested_by is the user attempting the moderation action.
 		// In Phase 5, this will be extracted automatically from the Supabase Auth JWT token
 		// via middleware, and this field will be removed from the request body.
-		var req struct {
-			RequestedBy string `json:"requested_by" binding:"required"`
-		}
-
-		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "requested_by is required"})
-			return
-		}
+		// In Phase 5 the requesting user is identified by the authenticated JWT token.
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
 
 		// Check the requesting user's role using UserService.
 		// Only users with role = "admin" are permitted to approve or reject artworks.
-		isAdmin, err := userService.IsAdmin(context.Background(), req.RequestedBy)
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
 		if err != nil {
 			// User not found in the database — reject the request.
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})

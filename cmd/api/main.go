@@ -77,6 +77,7 @@ func main() {
 	// gin.Default() includes default middleware for logging and error recovery.
 	// This router will handle all HTTP requests for the API.
 	r := gin.Default()
+	authMiddleware := handlers.AuthMiddleware(userService)
 
 	// Register health check endpoint: GET /api/health
 	// Returns {"status": "ok"} with HTTP 200 if the server is running.
@@ -97,24 +98,26 @@ func main() {
 	r.POST("/api/users", handlers.CreateUser(userService)) // Create new user from auth provider UID
 	r.GET("/api/users/:id", handlers.GetUser(userService)) // Retrieve user profile by ID
 	r.GET("/api/users", handlers.GetAllUsers(userService)) // Retrieve all users
+	r.POST("/api/users/link-provider", authMiddleware, handlers.LinkProvider(userService))
 
 	// ── Artists ───────────────────────────────────────────
 	// Artist CRUD endpoints for managing music artists.
-	r.POST("/api/artists", handlers.CreateArtist(artistService)) // Create new artist record
-	r.GET("/api/artists/:id", handlers.GetArtist(artistService)) // Retrieve artist by ID
-	r.GET("/api/artists", handlers.GetAllArtists(artistService)) // Retrieve all artists (paginated)
+	// Protect creation endpoints with AuthMiddleware so submitted_by is populated from token
+	r.POST("/api/artists", authMiddleware, handlers.CreateArtist(artistService)) // Create new artist record
+	r.GET("/api/artists/:id", handlers.GetArtist(artistService))                 // Retrieve artist by ID
+	r.GET("/api/artists", handlers.GetAllArtists(artistService))                 // Retrieve all artists (paginated)
 
 	// ── Albums ────────────────────────────────────────────
 	// Album CRUD endpoints for managing music albums and their artist associations.
-	r.POST("/api/albums", handlers.CreateAlbum(albumService)) // Create new album with artists
-	r.GET("/api/albums/:id", handlers.GetAlbum(albumService)) // Retrieve album with populated artists
-	r.GET("/api/albums", handlers.GetAllAlbums(albumService)) // Retrieve all albums with artists (paginated)
+	r.POST("/api/albums", authMiddleware, handlers.CreateAlbum(albumService)) // Create new album with artists
+	r.GET("/api/albums/:id", handlers.GetAlbum(albumService))                 // Retrieve album with populated artists
+	r.GET("/api/albums", handlers.GetAllAlbums(albumService))                 // Retrieve all albums with artists (paginated)
 
 	// ── Artworks ──────────────────────────────────────────
 	// Artwork submission and retrieval endpoints for album cover images and promotional images.
-	r.POST("/api/albums/:id/artworks", handlers.CreateArtwork(artworkService))     // Submit new artwork for album
-	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService)) // Retrieve artworks with filtering and pagination
-	r.GET("/api/artworks", handlers.GetAllArtworks(artworkService))                // Retrieve all artworks with filtering
+	r.POST("/api/albums/:id/artworks", authMiddleware, handlers.CreateArtwork(artworkService)) // Submit new artwork for album
+	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService))             // Retrieve artworks with filtering and pagination
+	r.GET("/api/artworks", handlers.GetAllArtworks(artworkService))                            // Retrieve all artworks with filtering
 
 	// ── Search (Phase 3) ───────────────────────────────────
 	// Full-text and fuzzy search endpoints using PostgreSQL pg_trgm trigram similarity.
@@ -123,14 +126,14 @@ func main() {
 
 	// ── Artwork Sources ───────────────────────────────────
 	// Artwork source management endpoints for tracking and updating artwork metadata sources.
-	r.POST("/api/artworks/:artwork_id/sources", handlers.AddArtworkSource(artworkService))                 // Add new source for artwork
+	r.POST("/api/artworks/:artwork_id/sources", authMiddleware, handlers.AddArtworkSource(artworkService)) // Add new source for artwork
 	r.GET("/api/artworks/:artwork_id/sources", handlers.ListArtworkSources(artworkService))                // List all sources for artwork
 	r.PATCH("/api/artworks/:artwork_id/sources/:source_id", handlers.UpdateArtworkSource(artworkService))  // Update source details
 	r.DELETE("/api/artworks/:artwork_id/sources/:source_id", handlers.DeleteArtworkSource(artworkService)) // Remove source for artwork
 
 	// ── Moderation (Phase 2) ──────────────────────────────
-	r.PATCH("/api/artworks/:artwork_id/approve", handlers.ApproveArtwork(artworkService, userService))
-	r.PATCH("/api/artworks/:artwork_id/reject", handlers.RejectArtwork(artworkService, userService))
+	r.PATCH("/api/artworks/:artwork_id/approve", authMiddleware, handlers.ApproveArtwork(artworkService, userService))
+	r.PATCH("/api/artworks/:artwork_id/reject", authMiddleware, handlers.RejectArtwork(artworkService, userService))
 
 	// Log server startup message for operational visibility.
 	// Indicates that the server is ready to accept requests.

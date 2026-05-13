@@ -97,6 +97,34 @@
             },
             "description": "Retrieve all users in the system"
           }
+        },
+        {
+          "name": "Link Provider Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider_user_id\": \"legacy-email-user-id\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/users/link-provider",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users", "link-provider"]
+            },
+            "description": "Merge/link provider account data into the authenticated user"
+          }
         }
       ]
     },
@@ -109,13 +137,17 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"artist-001\",\n  \"name\": \"The Beatles\",\n  \"artist_bio\": \"British rock band formed in 1960\",\n  \"image_url\": \"https://example.com/beatles.jpg\",\n  \"submitted_by\": \"user-123-from-auth-provider\"\n}"
+              "raw": "{\n  \"id\": \"artist-001\",\n  \"name\": \"The Beatles\",\n  \"artist_bio\": \"British rock band formed in 1960\",\n  \"image_url\": \"https://example.com/beatles.jpg\"\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/artists",
@@ -207,13 +239,17 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"album-001\",\n  \"title\": \"Abbey Road\",\n  \"release_year\": 1969,\n  \"artist_ids\": [\"artist-001\"],\n  \"submitted_by\": \"user-123-from-auth-provider\"\n}"
+              "raw": "{\n  \"id\": \"album-001\",\n  \"title\": \"Abbey Road\",\n  \"release_year\": 1969,\n  \"artist_ids\": [\"artist-001\"]\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/albums",
@@ -305,13 +341,17 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"artwork-001\",\n  \"album_id\": \"album-001\",\n  \"image_url\": \"https://example.com/abbey-road-cover.jpg\",\n  \"thumbnail_url\": \"https://example.com/abbey-road-thumb.jpg\",\n  \"is_official\": true,\n  \"submitted_by\": \"user-123-from-auth-provider\"\n}"
+              "raw": "{\n  \"id\": \"artwork-001\",\n  \"album_id\": \"album-001\",\n  \"image_url\": \"https://example.com/abbey-road-cover.jpg\",\n  \"thumbnail_url\": \"https://example.com/abbey-road-thumb.jpg\",\n  \"is_official\": true\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/albums/album-001/artworks",
@@ -406,13 +446,17 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"source-001\",\n  \"source_name\": \"Discogs\",\n  \"source_page\": \"https://www.discogs.com/release/12345\",\n  \"image_url\": \"https://example.com/source-image.jpg\",\n  \"source_type\": \"storefront\",\n  \"confidence_score\": 0.95,\n  \"quality_score\": 0.88,\n  \"is_primary\": true,\n  \"discovered_by\": \"user-123-from-auth-provider\"\n}"
+              "raw": "{\n  \"id\": \"source-001\",\n  \"source_name\": \"Discogs\",\n  \"source_page\": \"https://www.discogs.com/release/12345\",\n  \"image_url\": \"https://example.com/source-image.jpg\",\n  \"source_type\": \"storefront\",\n  \"confidence_score\": 0.95,\n  \"quality_score\": 0.88,\n  \"is_primary\": true\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/artworks/artwork-001/sources",
@@ -489,13 +533,17 @@
             "method": "PATCH",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requested_by\": \"admin-user-id\"\n}"
+              "raw": "{}"
             },
             "url": {
               "raw": "http://localhost:8080/api/artworks/artwork-001/approve",
@@ -504,7 +552,7 @@
               "port": "8080",
               "path": ["api", "artworks", "artwork-001", "approve"]
             },
-            "description": "Approve an artwork (admin only). Sets approval_status to 'approved'. Note: In Phase 5, requested_by will come from JWT token"
+            "description": "Approve an artwork (admin only). Sets approval_status to 'approved'. Uses JWT token identity."
           }
         },
         {
@@ -513,13 +561,17 @@
             "method": "PATCH",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"requested_by\": \"admin-user-id\"\n}"
+              "raw": "{}"
             },
             "url": {
               "raw": "http://localhost:8080/api/artworks/artwork-001/reject",
@@ -528,7 +580,7 @@
               "port": "8080",
               "path": ["api", "artworks", "artwork-001", "reject"]
             },
-            "description": "Reject an artwork (admin only). Sets approval_status to 'rejected'. Note: In Phase 5, requested_by will come from JWT token"
+            "description": "Reject an artwork (admin only). Sets approval_status to 'rejected'. Uses JWT token identity."
           }
         }
       ]

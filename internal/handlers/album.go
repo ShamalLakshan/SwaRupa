@@ -51,7 +51,6 @@ func CreateAlbum(albumService *services.AlbumService) gin.HandlerFunc {
 			Title       string   `json:"title"       binding:"required"`
 			ReleaseYear int      `json:"release_year"`
 			ArtistIDs   []string `json:"artist_ids"  binding:"required,min=1"`
-			SubmittedBy string   `json:"submitted_by"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -61,12 +60,15 @@ func CreateAlbum(albumService *services.AlbumService) gin.HandlerFunc {
 
 		// Delegate album creation to the service layer.
 		// The service handles transaction management, UUID generation, and artist association.
+		userID, _ := c.Get("user_id")
+		submittedBy, _ := userID.(string)
+
 		album, err := albumService.CreateAlbum(
 			context.Background(),
 			req.Title,
 			req.ReleaseYear,
 			req.ArtistIDs,
-			req.SubmittedBy,
+			submittedBy,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create album"})

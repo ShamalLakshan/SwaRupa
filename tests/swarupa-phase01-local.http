@@ -1,6 +1,7 @@
 ### SwaRupa API — Comprehensive Endpoint Tests
 ### Base URL: http://localhost:8080
 ### Note: UUIDs in URLs should be replaced with actual IDs from API responses
+@access_token = REPLACE_WITH_SUPABASE_ACCESS_TOKEN
 
 
 # ==============================================================
@@ -59,6 +60,17 @@ GET http://localhost:8080/api/users
 ### 6. Get All Users — with pagination (page 1, 20 per page)
 GET http://localhost:8080/api/users?page=1&limit=20
 
+---
+
+### 6a. Link Provider Account (authenticated)
+POST http://localhost:8080/api/users/link-provider
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "provider_user_id": "legacy_email_user_id"
+}
+
 
 # ==============================================================
 # ARTISTS
@@ -67,12 +79,12 @@ GET http://localhost:8080/api/users?page=1&limit=20
 ### 7. Create Artist — full fields
 POST http://localhost:8080/api/artists
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "name": "Sushmit Fernando",
   "artist_bio": "Sri Lankan music producer",
-  "image_url": "https://example.com/sushmit.jpg",
-  "submitted_by": "user_001"
+  "image_url": "https://example.com/sushmit.jpg"
 }
 
 ---
@@ -80,6 +92,7 @@ Content-Type: application/json
 ### 8. Create Artist — minimal (name only)
 POST http://localhost:8080/api/artists
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "name": "Thom Yorke"
@@ -90,6 +103,7 @@ Content-Type: application/json
 ### 9. Create Artist — missing name (expect 400)
 POST http://localhost:8080/api/artists
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "image_url": "https://example.com/image.jpg"
@@ -153,12 +167,12 @@ GET http://localhost:8080/search/artists
 ### 16. Create Album — single artist
 POST http://localhost:8080/api/albums
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "title": "Silent Lanterns",
   "release_year": 2023,
-  "artist_ids": ["ARTIST_ID_1"],
-  "submitted_by": "user_001"
+  "artist_ids": ["ARTIST_ID_1"]
 }
 
 ---
@@ -166,12 +180,12 @@ Content-Type: application/json
 ### 17. Create Album — multiple artists
 POST http://localhost:8080/api/albums
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "title": "Collaborative Work",
   "release_year": 2024,
-  "artist_ids": ["ARTIST_ID_1", "ARTIST_ID_2"],
-  "submitted_by": "user_001"
+  "artist_ids": ["ARTIST_ID_1", "ARTIST_ID_2"]
 }
 
 ---
@@ -179,6 +193,7 @@ Content-Type: application/json
 ### 18. Create Album — no release year (optional)
 POST http://localhost:8080/api/albums
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "title": "Untitled Album",
@@ -190,6 +205,7 @@ Content-Type: application/json
 ### 19. Create Album — missing title (expect 400)
 POST http://localhost:8080/api/albums
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "release_year": 2024,
@@ -201,6 +217,7 @@ Content-Type: application/json
 ### 20. Create Album — missing artist_ids (expect 400)
 POST http://localhost:8080/api/albums
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "title": "No Artists Album"
@@ -211,6 +228,7 @@ Content-Type: application/json
 ### 21. Create Album — empty artist_ids (expect 400)
 POST http://localhost:8080/api/albums
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "title": "Empty Artists",
@@ -270,6 +288,7 @@ GET http://localhost:8080/search/albums
 ### 27. Submit Artwork — with source details
 POST http://localhost:8080/api/albums/ALBUM_ID_1/artworks
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "source_name": "official",
@@ -277,8 +296,7 @@ Content-Type: application/json
   "image_url": "https://example.com/cover.jpg",
   "source_type": "official",
   "confidence_score": 1.0,
-  "quality_score": 0.95,
-  "discovered_by": "user_001"
+  "quality_score": 0.95
 }
 
 ---
@@ -286,6 +304,7 @@ Content-Type: application/json
 ### 28. Submit Artwork — minimal
 POST http://localhost:8080/api/albums/ALBUM_ID_1/artworks
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "source_name": "user_upload",
@@ -297,6 +316,7 @@ Content-Type: application/json
 ### 29. Submit Artwork — missing image_url (expect 400)
 POST http://localhost:8080/api/albums/ALBUM_ID_1/artworks
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "source_name": "gallery"
@@ -365,6 +385,7 @@ GET http://localhost:8080/api/artworks?official=true&sort=priority
 ### 41. Add Source to Artwork
 POST http://localhost:8080/api/artworks/ARTWORK_ID_1/sources
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "source_name": "spotify",
@@ -377,6 +398,7 @@ Content-Type: application/json
 ### 42. Add Source — missing source_name (expect 400)
 POST http://localhost:8080/api/artworks/ARTWORK_ID_1/sources
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {
   "source_page": "https://example.com",
@@ -432,26 +454,25 @@ DELETE http://localhost:8080/api/artworks/ARTWORK_ID_1/sources/00000000-0000-000
 ### 49. Approve Artwork
 PATCH http://localhost:8080/api/artworks/ARTWORK_ID_1/approve
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
-{
-  "requested_by": "user_001"
-}
+{}
 
 ---
 
 ### 50. Approve Artwork — non-admin user (expect 403)
 PATCH http://localhost:8080/api/artworks/ARTWORK_ID_1/approve
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
-{
-  "requested_by": "user_not_admin"
-}
+{}
 
 ---
 
-### 51. Approve Artwork — missing requested_by (expect 400)
+### 51. Approve Artwork — no body (expect auth/role-driven response)
 PATCH http://localhost:8080/api/artworks/ARTWORK_ID_1/approve
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {}
 
@@ -460,26 +481,25 @@ Content-Type: application/json
 ### 52. Reject Artwork
 PATCH http://localhost:8080/api/artworks/ARTWORK_ID_1/reject
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
-{
-  "requested_by": "user_001"
-}
+{}
 
 ---
 
 ### 53. Reject Artwork — non-admin user (expect 403)
 PATCH http://localhost:8080/api/artworks/ARTWORK_ID_1/reject
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
-{
-  "requested_by": "user_not_admin"
-}
+{}
 
 ---
 
-### 54. Reject Artwork — missing requested_by (expect 400)
+### 54. Reject Artwork — no body (expect auth/role-driven response)
 PATCH http://localhost:8080/api/artworks/ARTWORK_ID_1/reject
 Content-Type: application/json
+Authorization: Bearer {{access_token}}
 
 {}
 

@@ -17,6 +17,8 @@ type User struct {
 	// in the user interface or API responses to identify who submitted a particular contribution.
 	// If not provided, the client may choose to display the ID or a generic identifier.
 	DisplayName string `json:"display_name,omitempty"`
+	// Email stores the user's primary email address when available from the auth provider.
+	Email string `json:"email,omitempty"`
 
 	// Role represents the authorization level of the user within the system.
 	// Common roles include "contributor" (can submit metadata), "moderator" (can review submissions),
