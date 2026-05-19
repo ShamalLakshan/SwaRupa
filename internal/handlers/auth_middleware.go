@@ -210,10 +210,14 @@ func AuthMiddleware(userService *services.UserService) gin.HandlerFunc {
 		}
 
 		// Ensure user exists in database (idempotent). Pass email so email is saved for email/password signups.
-		_, _ = userService.CreateUser(context.Background(), sub, displayName, email)
+		if _, err := userService.CreateUser(context.Background(), sub, displayName, email); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "failed to provision user"})
+			return
+		}
 
 		// Attach user id to context for downstream handlers
 		c.Set("user_id", sub)
+		c.Set("email", email)
 
 		c.Next()
 	}

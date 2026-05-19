@@ -2,9 +2,31 @@
   "info": {
     "_postman_id": "swarupa-api-collection",
     "name": "SwaRupa Music Metadata API",
-    "description": "Complete test collection for SwaRupa API - Phases 1-4 endpoints",
+    "description": "Test collection for SwaRupa API with Supabase Auth user sync and role-based access patterns",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "access_token",
+      "value": "REPLACE_WITH_SUPABASE_ACCESS_TOKEN"
+    },
+    {
+      "key": "supabase_user_id",
+      "value": "REPLACE_WITH_SUPABASE_USER_ID"
+    },
+    {
+      "key": "supabase_email",
+      "value": "user@example.com"
+    },
+    {
+      "key": "api_key",
+      "value": "REPLACE_WITH_USER_API_KEY"
+    }
+  ],
   "item": [
     {
       "name": "Health & Info",
@@ -45,10 +67,14 @@
       "name": "Users",
       "item": [
         {
-          "name": "Create User",
+          "name": "Sync Supabase User Profile",
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -56,7 +82,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"id\": \"user-123-from-auth-provider\",\n  \"display_name\": \"John Doe\"\n}"
+              "raw": "{\n  \"id\": \"{{supabase_user_id}}\",\n  \"display_name\": \"John Doe\",\n  \"email\": \"{{supabase_email}}\"\n}"
             },
             "url": {
               "raw": "http://localhost:8080/api/users",
@@ -65,7 +91,7 @@
               "port": "8080",
               "path": ["api", "users"]
             },
-            "description": "Register a new user with auth provider UID. role defaults to 'contributor'"
+            "description": "Idempotently sync a Supabase Auth user into the local users table. The Supabase user id should be the stable identity reference."
           }
         },
         {
@@ -74,13 +100,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "http://localhost:8080/api/users/user-123-from-auth-provider",
+              "raw": "http://localhost:8080/api/users/{{supabase_user_id}}",
               "protocol": "http",
               "host": ["localhost"],
               "port": "8080",
-              "path": ["api", "users", "user-123-from-auth-provider"]
+              "path": ["api", "users", "{{supabase_user_id}}"]
             },
-            "description": "Retrieve a specific user by their authentication ID"
+            "description": "Retrieve a local user profile by Supabase Auth user id"
           }
         },
         {
@@ -95,7 +121,7 @@
               "port": "8080",
               "path": ["api", "users"]
             },
-            "description": "Retrieve all users in the system"
+            "description": "Retrieve all users in the system. This should become admin-only once role protection is tightened."
           }
         },
         {
@@ -123,7 +149,7 @@
               "port": "8080",
               "path": ["api", "users", "link-provider"]
             },
-            "description": "Merge/link provider account data into the authenticated user"
+            "description": "Merge/link an additional provider identity into the authenticated Supabase user"
           }
         }
       ]

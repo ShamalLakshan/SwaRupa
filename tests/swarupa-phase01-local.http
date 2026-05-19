@@ -2,6 +2,8 @@
 ### Base URL: http://localhost:8080
 ### Note: UUIDs in URLs should be replaced with actual IDs from API responses
 @access_token = REPLACE_WITH_SUPABASE_ACCESS_TOKEN
+@supabase_user_id = REPLACE_WITH_SUPABASE_USER_ID
+@supabase_email = user@example.com
 
 
 # ==============================================================
@@ -23,17 +25,20 @@ GET http://localhost:8080/api/welcome
 
 ### 1. Create User
 POST http://localhost:8080/api/users
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
-  "id": "user_001",
-  "display_name": "Alice Admin"
+  "id": "{{supabase_user_id}}",
+  "display_name": "Alice Admin",
+  "email": "{{supabase_email}}"
 }
 
 ---
 
 ### 2. Create User — missing id (expect 400)
 POST http://localhost:8080/api/users
+Authorization: Bearer {{access_token}}
 Content-Type: application/json
 
 {
@@ -43,7 +48,7 @@ Content-Type: application/json
 ---
 
 ### 3. Get User by ID
-GET http://localhost:8080/api/users/user_001
+GET http://localhost:8080/api/users/{{supabase_user_id}}
 
 ---
 

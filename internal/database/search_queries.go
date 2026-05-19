@@ -305,7 +305,7 @@ func GetArtworksByAlbumIDWithPagination(ctx context.Context, db *pgxpool.Pool, a
 	}
 
 	if onlyOfficial {
-		whereClause += fmt.Sprintf(" AND is_official = true")
+		whereClause += " AND is_official = true"
 	}
 
 	// Get total count
