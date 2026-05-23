@@ -2,16 +2,34 @@ name: Supabase Keep-Alive HeartBeat
 
 on:
   schedule:
-    # Runs at 00:00 every 3rd day
+    # Runs every 3 days at 00:00 UTC
     - cron: '0 0 */3 * *'
   workflow_dispatch: # Allows manual triggering for testing
 
 jobs:
-  ping-db:
+  heartbeat:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase Database
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Write heartbeat to database
         env:
           DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          psql "$DB_URL" -c "SELECT 1;"
+          psql "$DB_URL" << EOF
+          INSERT INTO heartbeat (heartbeat_at, status, workflow_name, notes)
+          VALUES (now(), 'ok', 'github-actions-heartbeat', 'Scheduled keep-alive ping')
+          ON CONFLICT DO NOTHING;
+          
+          -- Verify insert was successful
+          SELECT 'Heartbeat recorded at: ' || heartbeat_at FROM heartbeat 
+          ORDER BY heartbeat_at DESC LIMIT 1;
+          EOF
+
+      - name: Cleanup old heartbeats (keep last 90 days)
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        continue-on-error: true
+        run: |
+          psql "$DB_URL" -c "DELETE FROM heartbeat WHERE heartbeat_at < now() - INTERVAL '90 days';"
