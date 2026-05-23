@@ -75,8 +75,9 @@ func CreateAlbum(albumService *services.AlbumService) gin.HandlerFunc {
 			return
 		}
 
-		// Return HTTP 201 Created with the newly created album.
-		c.JSON(http.StatusCreated, album)
+		// Return HTTP 202 Accepted with the newly created album.
+		// The album is created with approval_status='pending' and will only appear publicly after admin approval.
+		c.JSON(http.StatusAccepted, album)
 	}
 }
 
@@ -165,8 +166,8 @@ func GetAllAlbums(albumService *services.AlbumService) gin.HandlerFunc {
 		}
 
 		// Delegate album retrieval to the service layer.
-		// The service handles pagination validation, database queries, and artist association population.
-		albums, total, err := albumService.GetAllAlbumsWithPagination(context.Background(), page, limit)
+		// The service retrieves only APPROVED albums (public endpoint), handles pagination, and populates artists.
+		albums, total, err := albumService.GetApprovedAlbums(context.Background(), page, limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve albums"})
 			return
@@ -192,5 +193,148 @@ func GetAllAlbums(albumService *services.AlbumService) gin.HandlerFunc {
 
 		// Marshal the paginated albums response to JSON and return HTTP 200 OK.
 		c.JSON(http.StatusOK, response)
+	}
+}
+
+// GetPendingAlbums handles GET /api/admin/albums/pending to retrieve albums awaiting approval.
+// Supports pagination through query parameters: ?page=1&limit=20
+// Admin only endpoint.
+func GetPendingAlbums(albumService *services.AlbumService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can view pending albums"})
+			return
+		}
+
+		// Parse pagination parameters
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
+		// Retrieve pending albums
+		albums, total, err := albumService.GetPendingAlbums(context.Background(), page, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query pending albums"})
+			return
+		}
+
+		if albums == nil {
+			albums = []models.Album{}
+		}
+
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       albums,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+// ApproveAlbum handles PATCH /api/admin/albums/:album_id/approve
+// Marks an album as approved and records who approved it. Admin only.
+func ApproveAlbum(albumService *services.AlbumService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		albumID := c.Param("album_id")
+
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can approve albums"})
+			return
+		}
+
+		// Approve the album
+		album, err := albumService.ApproveAlbum(context.Background(), albumID, uid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve album"})
+			return
+		}
+
+		if album == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "album not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, album)
+	}
+}
+
+// RejectAlbum handles PATCH /api/admin/albums/:album_id/reject
+// Marks an album as rejected with an optional reason. Admin only.
+func RejectAlbum(albumService *services.AlbumService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		albumID := c.Param("album_id")
+
+		var req struct {
+			RejectionReason string `json:"rejection_reason"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can reject albums"})
+			return
+		}
+
+		// Reject the album
+		album, err := albumService.RejectAlbum(context.Background(), albumID, uid, req.RejectionReason)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reject album"})
+			return
+		}
+
+		if album == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "album not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, album)
 	}
 }

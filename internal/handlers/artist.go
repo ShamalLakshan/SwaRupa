@@ -75,10 +75,10 @@ func CreateArtist(artistService *services.ArtistService) gin.HandlerFunc {
 			return
 		}
 
-		// Return HTTP 201 Created with the newly created artist record.
+		// Return HTTP 202 Accepted with the newly created artist record.
+		// The artist is created with approval_status='pending' and will only appear publicly after admin approval.
 		// The response includes all provided fields and the server-generated ID.
-		// Clients use the returned ID for subsequent requests (e.g., GET /artists/{id}).
-		c.JSON(http.StatusCreated, artist)
+		c.JSON(http.StatusAccepted, artist)
 	}
 }
 
@@ -155,9 +155,9 @@ func GetAllArtists(artistService *services.ArtistService) gin.HandlerFunc {
 			}
 		}
 
-		// Call the service to retrieve paginated artists.
-		// The service handles validation, database query, and pagination logic.
-		artists, total, err := artistService.GetAllArtistsWithPagination(context.Background(), page, limit)
+		// Call the service to retrieve paginated APPROVED artists only (public endpoint).
+		// The service filters where approval_status='approved' and handles pagination.
+		artists, total, err := artistService.GetApprovedArtists(context.Background(), page, limit)
 		if err != nil {
 			// Query errors indicate database connectivity or syntax issues (this should not happen in production).
 			// Return 500 and log the error for operational troubleshooting.
@@ -186,5 +186,148 @@ func GetAllArtists(artistService *services.ArtistService) gin.HandlerFunc {
 
 		// Marshal the paginated response to JSON and return HTTP 200 OK.
 		c.JSON(http.StatusOK, response)
+	}
+}
+
+// GetPendingArtists handles GET /api/admin/artists/pending to retrieve artists awaiting approval.
+// Supports pagination through query parameters: ?page=1&limit=20
+// Admin only endpoint.
+func GetPendingArtists(artistService *services.ArtistService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can view pending artists"})
+			return
+		}
+
+		// Parse pagination parameters
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
+		// Retrieve pending artists
+		artists, total, err := artistService.GetPendingArtists(context.Background(), page, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query pending artists"})
+			return
+		}
+
+		if artists == nil {
+			artists = []models.Artist{}
+		}
+
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       artists,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+// ApproveArtist handles PATCH /api/admin/artists/:artist_id/approve
+// Marks an artist as approved and records who approved it. Admin only.
+func ApproveArtist(artistService *services.ArtistService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		artistID := c.Param("artist_id")
+
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can approve artists"})
+			return
+		}
+
+		// Approve the artist
+		artist, err := artistService.ApproveArtist(context.Background(), artistID, uid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve artist"})
+			return
+		}
+
+		if artist == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, artist)
+	}
+}
+
+// RejectArtist handles PATCH /api/admin/artists/:artist_id/reject
+// Marks an artist as rejected with an optional reason. Admin only.
+func RejectArtist(artistService *services.ArtistService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		artistID := c.Param("artist_id")
+
+		var req struct {
+			RejectionReason string `json:"rejection_reason"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can reject artists"})
+			return
+		}
+
+		// Reject the artist
+		artist, err := artistService.RejectArtist(context.Background(), artistID, uid, req.RejectionReason)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reject artist"})
+			return
+		}
+
+		if artist == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, artist)
 	}
 }

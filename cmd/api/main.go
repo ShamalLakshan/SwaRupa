@@ -7,11 +7,13 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/database"
 	"github.com/ShamalLakshan/SwaRupa/internal/handlers"
 	"github.com/ShamalLakshan/SwaRupa/internal/services"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -70,6 +72,21 @@ func main() {
 	artistService := services.NewArtistService(database.DB)
 	userService := services.NewUserService(database.DB)
 
+	// Initialize GitHub OAuth configuration
+	// Requires GITHUB_OAUTH_CLIENT_ID, GITHUB_OAUTH_CLIENT_SECRET environment variables
+	// CALLBACK_URL should be your deployed domain (e.g., https://api.example.com/auth/github/callback)
+	callbackURL := os.Getenv("CALLBACK_URL")
+	if callbackURL == "" {
+		callbackURL = "http://localhost:8080/auth/github/callback"
+	}
+	if err := handlers.InitGitHubOAuth(callbackURL); err != nil {
+		log.Println("GitHub OAuth not configured:", err)
+	}
+
+	// Initialize rate limiter: 10 requests per hour per user
+	rateLimiter := handlers.NewRateLimiter(10)
+	defer rateLimiter.Stop() // Gracefully shutdown rate limiter
+
 	// Sets gin to Release mode instead of the default debug mode.
 	gin.SetMode(gin.ReleaseMode)
 
@@ -77,7 +94,14 @@ func main() {
 	// gin.Default() includes default middleware for logging and error recovery.
 	// This router will handle all HTTP requests for the API.
 	r := gin.Default()
+
+	// Enable CORS for frontend integration
+	// cors.Default() allows all origins in development
+	// For production, configure specific origins: cors.Config{AllowOrigins: []string{"https://yourdomain.com"}}
+	r.Use(cors.Default())
+
 	authMiddleware := handlers.AuthMiddleware(userService)
+	rateLimitMiddleware := handlers.RateLimitMiddleware(rateLimiter)
 
 	// Register health check endpoint: GET /api/health
 	// Returns {"status": "ok"} with HTTP 200 if the server is running.
@@ -93,6 +117,11 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"api-health": "ok", "docs": "documentation-link-ToBeUpdated"})
 	})
 
+	// ── Authentication (GitHub OAuth) ────────────────────
+	// GitHub OAuth endpoints for authentication
+	r.GET("/auth/github", handlers.GitHubOAuthLogin)                          // Redirect to GitHub consent
+	r.GET("/auth/github/callback", handlers.GitHubOAuthCallback(userService)) // Handle OAuth callback
+
 	// ── Users ─────────────────────────────────────────────
 	// User endpoints for authentication and user profile management.
 	r.POST("/api/users", handlers.CreateUser(userService)) // Create new user from auth provider UID
@@ -103,21 +132,36 @@ func main() {
 	// ── Artists ───────────────────────────────────────────
 	// Artist CRUD endpoints for managing music artists.
 	// Protect creation endpoints with AuthMiddleware so submitted_by is populated from token
-	r.POST("/api/artists", authMiddleware, handlers.CreateArtist(artistService)) // Create new artist record
-	r.GET("/api/artists/:id", handlers.GetArtist(artistService))                 // Retrieve artist by ID
-	r.GET("/api/artists", handlers.GetAllArtists(artistService))                 // Retrieve all artists (paginated)
+	// Apply rate limiting to POST endpoint
+	r.POST("/api/artists", authMiddleware, rateLimitMiddleware, handlers.CreateArtist(artistService)) // Create new artist record (rate limited)
+	r.GET("/api/artists/:id", handlers.GetArtist(artistService))                                      // Retrieve artist by ID
+	r.GET("/api/artists", handlers.GetAllArtists(artistService))                                      // Retrieve approved artists (public, paginated)
+
+	// ── Artist Moderation (Admin) ────────────────────────
+	// Admin-only endpoints for approving/rejecting artist submissions
+	r.GET("/api/admin/artists/pending", authMiddleware, handlers.GetPendingArtists(artistService, userService))          // View pending submissions
+	r.PATCH("/api/admin/artists/:artist_id/approve", authMiddleware, handlers.ApproveArtist(artistService, userService)) // Approve artist
+	r.PATCH("/api/admin/artists/:artist_id/reject", authMiddleware, handlers.RejectArtist(artistService, userService))   // Reject artist
 
 	// ── Albums ────────────────────────────────────────────
 	// Album CRUD endpoints for managing music albums and their artist associations.
-	r.POST("/api/albums", authMiddleware, handlers.CreateAlbum(albumService)) // Create new album with artists
-	r.GET("/api/albums/:id", handlers.GetAlbum(albumService))                 // Retrieve album with populated artists
-	r.GET("/api/albums", handlers.GetAllAlbums(albumService))                 // Retrieve all albums with artists (paginated)
+	// Apply rate limiting to POST endpoint
+	r.POST("/api/albums", authMiddleware, rateLimitMiddleware, handlers.CreateAlbum(albumService)) // Create new album with artists (rate limited)
+	r.GET("/api/albums/:id", handlers.GetAlbum(albumService))                                      // Retrieve album with populated artists
+	r.GET("/api/albums", handlers.GetAllAlbums(albumService))                                      // Retrieve approved albums with artists (paginated)
+
+	// ── Album Moderation (Admin) ────────────────────────
+	// Admin-only endpoints for approving/rejecting album submissions
+	r.GET("/api/admin/albums/pending", authMiddleware, handlers.GetPendingAlbums(albumService, userService))         // View pending submissions
+	r.PATCH("/api/admin/albums/:album_id/approve", authMiddleware, handlers.ApproveAlbum(albumService, userService)) // Approve album
+	r.PATCH("/api/admin/albums/:album_id/reject", authMiddleware, handlers.RejectAlbum(albumService, userService))   // Reject album
 
 	// ── Artworks ──────────────────────────────────────────
 	// Artwork submission and retrieval endpoints for album cover images and promotional images.
-	r.POST("/api/albums/:id/artworks", authMiddleware, handlers.CreateArtwork(artworkService)) // Submit new artwork for album
-	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService))             // Retrieve artworks with filtering and pagination
-	r.GET("/api/artworks", handlers.GetAllArtworks(artworkService))                            // Retrieve all artworks with filtering
+	// Apply rate limiting to POST endpoint
+	r.POST("/api/albums/:id/artworks", authMiddleware, rateLimitMiddleware, handlers.CreateArtwork(artworkService)) // Submit new artwork for album (rate limited)
+	r.GET("/api/albums/:id/artworks", handlers.GetArtworksByAlbum(artworkService))                                  // Retrieve artworks with filtering and pagination
+	r.GET("/api/artworks", handlers.GetAllArtworks(artworkService))                                                 // Retrieve all artworks with filtering
 
 	// ── Search (Phase 3) ───────────────────────────────────
 	// Full-text and fuzzy search endpoints using PostgreSQL pg_trgm trigram similarity.

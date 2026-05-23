@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
 	"github.com/jackc/pgx/v5"
@@ -41,12 +42,12 @@ func (s *UserService) CreateUser(ctx context.Context, id, displayName, email str
 func (s *UserService) GetUserByID(ctx context.Context, userID string) (*models.User, error) {
 	var user models.User
 	var displayName *string
-	var email *string
+	var contactEmail *string
 
 	err := s.db.QueryRow(ctx,
-		`SELECT id, display_name, email, role, created_at FROM users WHERE id = $1`,
+		`SELECT id, display_name, contact_email, role, created_at FROM users WHERE id = $1`,
 		userID,
-	).Scan(&user.ID, &displayName, &email, &user.Role, &user.CreatedAt)
+	).Scan(&user.ID, &displayName, &contactEmail, &user.Role, &user.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -55,8 +56,8 @@ func (s *UserService) GetUserByID(ctx context.Context, userID string) (*models.U
 		user.DisplayName = *displayName
 	}
 
-	if email != nil {
-		user.Email = *email
+	if contactEmail != nil {
+		user.ContactEmail = *contactEmail
 	}
 
 	return &user, nil
@@ -65,7 +66,7 @@ func (s *UserService) GetUserByID(ctx context.Context, userID string) (*models.U
 // GetAllUsers retrieves all users.
 func (s *UserService) GetAllUsers(ctx context.Context) ([]models.User, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, display_name, email, role, created_at FROM users ORDER BY created_at DESC`,
+		`SELECT id, display_name, contact_email, role, created_at FROM users ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -76,17 +77,17 @@ func (s *UserService) GetAllUsers(ctx context.Context) ([]models.User, error) {
 	for rows.Next() {
 		var user models.User
 		var displayName *string
-		var email *string
+		var contactEmail *string
 
-		if err := rows.Scan(&user.ID, &displayName, &email, &user.Role, &user.CreatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &displayName, &contactEmail, &user.Role, &user.CreatedAt); err != nil {
 			continue
 		}
 
 		if displayName != nil {
 			user.DisplayName = *displayName
 		}
-		if email != nil {
-			user.Email = *email
+		if contactEmail != nil {
+			user.ContactEmail = *contactEmail
 		}
 
 		users = append(users, user)
@@ -169,6 +170,103 @@ func (s *UserService) LinkProviderAccount(ctx context.Context, primaryUserID, pr
 	}
 
 	return tx.Commit(ctx)
+}
+
+// CreateOrUpdateUserFromGitHub handles GitHub OAuth callback - idempotent upsert
+// Creates a new user or updates existing one with latest GitHub profile info
+func (s *UserService) CreateOrUpdateUserFromGitHub(ctx context.Context, gitHubID, gitHubUsername, displayName, profileURL string, contactEmail *string) (*models.User, error) {
+	var email *string
+	if contactEmail != nil && *contactEmail != "" {
+		email = contactEmail
+	}
+
+	// UPSERT: insert if new, update if exists
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO users (id, github_id, github_username, github_profile_url, display_name, contact_email, role, oauth_provider, last_login, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, 'contributor', 'github', now(), now())
+		 ON CONFLICT (id) DO UPDATE
+		   SET github_username = $3,
+		       github_profile_url = $4,
+		       display_name = COALESCE(NULLIF($5, ''), users.display_name),
+		       contact_email = COALESCE(NULLIF($6, ''), users.contact_email),
+		       last_login = now()`,
+		gitHubID, gitHubID, gitHubUsername, profileURL, displayName, email,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetUserByGitHubID(ctx, gitHubID)
+}
+
+// GetUserByGitHubID retrieves a user by their GitHub ID
+func (s *UserService) GetUserByGitHubID(ctx context.Context, gitHubID string) (*models.User, error) {
+	var user models.User
+	var displayName, contactEmail, gitHubUsername, gitHubProfileURL, oauthProvider *string
+	var lastLogin *time.Time
+
+	err := s.db.QueryRow(ctx,
+		`SELECT id, github_id, github_username, github_profile_url, display_name, contact_email, oauth_provider, role, last_login, created_at
+		 FROM users WHERE github_id = $1`,
+		gitHubID,
+	).Scan(&user.ID, &user.GitHubID, &gitHubUsername, &gitHubProfileURL, &displayName, &contactEmail, &oauthProvider, &user.Role, &lastLogin, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	if displayName != nil {
+		user.DisplayName = *displayName
+	}
+	if contactEmail != nil {
+		user.ContactEmail = *contactEmail
+	}
+	if gitHubUsername != nil {
+		user.GitHubUsername = *gitHubUsername
+	}
+	if gitHubProfileURL != nil {
+		user.GitHubProfileURL = *gitHubProfileURL
+	}
+	if oauthProvider != nil {
+		user.OAuthProvider = *oauthProvider
+	}
+	user.LastLogin = lastLogin
+
+	return &user, nil
+}
+
+// GetUserByGitHubUsername retrieves a user by their GitHub username
+func (s *UserService) GetUserByGitHubUsername(ctx context.Context, gitHubUsername string) (*models.User, error) {
+	var user models.User
+	var displayName, contactEmail, gitHubID, gitHubProfileURL, oauthProvider *string
+	var lastLogin *time.Time
+
+	err := s.db.QueryRow(ctx,
+		`SELECT id, github_id, github_username, github_profile_url, display_name, contact_email, oauth_provider, role, last_login, created_at
+		 FROM users WHERE github_username = $1`,
+		gitHubUsername,
+	).Scan(&user.ID, &gitHubID, &user.GitHubUsername, &gitHubProfileURL, &displayName, &contactEmail, &oauthProvider, &user.Role, &lastLogin, &user.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	if displayName != nil {
+		user.DisplayName = *displayName
+	}
+	if contactEmail != nil {
+		user.ContactEmail = *contactEmail
+	}
+	if gitHubID != nil {
+		user.GitHubID = *gitHubID
+	}
+	if gitHubProfileURL != nil {
+		user.GitHubProfileURL = *gitHubProfileURL
+	}
+	if oauthProvider != nil {
+		user.OAuthProvider = *oauthProvider
+	}
+	user.LastLogin = lastLogin
+
+	return &user, nil
 }
 
 // IsUserNotFoundError identifies pgx not-found errors from QueryRow scans.
