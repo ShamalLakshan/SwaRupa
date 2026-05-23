@@ -33,4 +33,20 @@ type Album struct {
 	// during album retrieval and represents all artists credited on the album.
 	// The slice is omitted from JSON responses if empty.
 	Artists []Artist `json:"artists,omitempty"`
+
+	// ApprovalStatus tracks the current state of the album submission in the approval workflow.
+	// Values: "pending" (awaiting review), "approved" (visible to public), "rejected" (hidden, with reason).
+	ApprovalStatus string `json:"approval_status"`
+
+	// ApprovedBy is the GitHub username of the admin who approved or rejected this submission.
+	// Null if the submission is still pending or if approval was automatic.
+	ApprovedBy *string `json:"approved_by,omitempty"`
+
+	// ApprovedAt records the timestamp when the submission was approved or rejected.
+	// Null if the submission is still pending.
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+
+	// RejectionReason contains optional explanation for why the submission was rejected.
+	// Helps submitters understand feedback and resubmit with corrections.
+	RejectionReason *string `json:"rejection_reason,omitempty"`
 }

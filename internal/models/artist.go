@@ -17,11 +17,11 @@ type Artist struct {
 	// unique where possible, though duplicates are permitted to support homonyms and variant spellings.
 	Name string `json:"name"`
 
-	// MusicBrainzID is an optional external identifier from MusicBrainz, a community-maintained
+	// ArtistBio is an optional external identifier from MusicBrainz, a community-maintained
 	// music database. This identifier enables integration with MusicBrainz APIs and helps link
 	// artist records across the SwaRupa system and external music metadata services.
 	// See https://musicbrainz.org/ for more information.
-	MusicBrainzID string `json:"artist_bio,omitempty"`
+	ArtistBio string `json:"artist_bio,omitempty"`
 
 	// ImageURL is an optional HTTP(S) URL pointing to a profile or promotional image of the artist.
 	// The field may reference images hosted on Content Delivery Networks (CDNs) or dedicated cloud storage.
@@ -35,4 +35,20 @@ type Artist struct {
 	// CreatedAt records the UTC timestamp when the artist record was first created in the database.
 	// This is a server-generated field that is immutable and set automatically upon record creation.
 	CreatedAt time.Time `json:"created_at"`
+
+	// ApprovalStatus tracks the current state of the artist submission in the approval workflow.
+	// Values: "pending" (awaiting review), "approved" (visible to public), "rejected" (hidden, with reason).
+	ApprovalStatus string `json:"approval_status"`
+
+	// ApprovedBy is the GitHub username of the admin who approved or rejected this submission.
+	// Null if the submission is still pending or if approval was automatic.
+	ApprovedBy *string `json:"approved_by,omitempty"`
+
+	// ApprovedAt records the timestamp when the submission was approved or rejected.
+	// Null if the submission is still pending.
+	ApprovedAt *time.Time `json:"approved_at,omitempty"`
+
+	// RejectionReason contains optional explanation for why the submission was rejected.
+	// Helps submitters understand feedback and resubmit with corrections.
+	RejectionReason *string `json:"rejection_reason,omitempty"`
 }

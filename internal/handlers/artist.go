@@ -3,12 +3,11 @@ package handlers
 import (
 	"context"
 	"net/http"
-	"time"
+	"strconv"
 
 	"github.com/ShamalLakshan/SwaRupa/internal/models"
+	"github.com/ShamalLakshan/SwaRupa/internal/services"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // CreateArtist handles POST /api/artists requests to create a new artist record.
@@ -24,9 +23,10 @@ import (
 //	  "submitted_by": "user-id" (optional)
 //	}
 //
-// SQL Operation:
-// Generates a UUID v4 (RFC 4122) for the new artist record and executes:
-// INSERT INTO artists (id, name, artist_bio, image_url, submitted_by) VALUES ($1, $2, $3, $4, $5)
+// Operation:
+// Calls ArtistService.CreateArtist() which generates a UUID v4 (RFC 4122) for the new artist record
+// and executes: INSERT INTO artists (id, name, artist_bio, image_url, submitted_by, created_at)
+// VALUES ($1, $2, $3, $4, $5, now())
 // The optional fields are normalized through nullableString(), converting empty strings to SQL NULL
 // for proper database semantics. This ensures nullable TEXT columns store NULL rather than empty strings.
 // All values are parameterized to prevent SQL injection attacks.
@@ -35,16 +35,15 @@ import (
 // - 201 Created: Artist successfully created; returns Artist model with generated ID and server timestamp
 // - 400 Bad Request: Missing required 'name' field in JSON body
 // - 500 Internal Server Error: Database error (connection, constraint violations, etc.)
-func CreateArtist(db *pgxpool.Pool) gin.HandlerFunc {
+func CreateArtist(artistService *services.ArtistService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Define a request struct with validation tags for automatic input validation.
 		// binding:"required" enforces non-empty values; unmarshaling failures automatically return 400.
 		// JSON tags establish bidirectional mapping between Go struct fields and JSON keys.
 		var req struct {
-			Name          string `json:"name"           binding:"required"`
-			MusicBrainzID string `json:"artist_bio"`
-			ImageURL      string `json:"image_url"`
-			SubmittedBy   string `json:"submitted_by"`
+			Name      string `json:"name"           binding:"required"`
+			ArtistBio string `json:"artist_bio"`
+			ImageURL  string `json:"image_url"`
 		}
 
 		// Unmarshal and validate the JSON request body.
@@ -55,49 +54,40 @@ func CreateArtist(db *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		// Generate a UUID v4 (RFC 4122) for the primary key.
-		// UUIDs provide globally unique identifiers without requiring database sequences,
-		// enabling client-side key generation and distributed system compatibility.
-		// uuid.New() uses cryptographic randomness; .String() formats as a 36-character string.
-		id := uuid.New().String()
+		// Call the service to create the artist.
+		// The service handles UUID generation, database insertion, and returning the created artist.
+		// Submitted_by will be populated from the authenticated token (Phase 5)
+		userID, _ := c.Get("user_id")
+		submittedBy, _ := userID.(string)
 
-		// Execute parameterized INSERT query to prevent SQL injection.
-		// All parameters ($1, $2, etc.) are placeholder values replaced by pgx at execution time.
-		// Optional fields are wrapped in nullableString() to convert empty strings to SQL NULL.
-		// The pgx driver automatically handles type conversion and encoding for PostgreSQL protocol.
-		_, err := db.Exec(
+		artist, err := artistService.CreateArtist(
 			context.Background(),
-			`INSERT INTO artists (id, name, artist_bio, image_url, submitted_by)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			id, req.Name, nullableString(req.MusicBrainzID), nullableString(req.ImageURL), nullableString(req.SubmittedBy),
+			req.Name,
+			req.ArtistBio,
+			req.ImageURL,
+			submittedBy,
 		)
 		if err != nil {
 			// Database errors include connection failures, constraint violations (e.g., unique constraints),
 			// and query syntax errors. All are treated as 500 Internal Server Error.
 			// In production systems, log the error and error type for operational visibility.
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to insert artist"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create artist"})
 			return
 		}
 
-		// Return HTTP 201 Created with the newly created artist record.
+		// Return HTTP 202 Accepted with the newly created artist record.
+		// The artist is created with approval_status='pending' and will only appear publicly after admin approval.
 		// The response includes all provided fields and the server-generated ID.
-		// Clients use the returned ID for subsequent requests (e.g., GET /artists/{id}).
-		c.JSON(http.StatusCreated, models.Artist{
-			ID:            id,
-			Name:          req.Name,
-			MusicBrainzID: req.MusicBrainzID,
-			ImageURL:      req.ImageURL,
-			SubmittedBy:   req.SubmittedBy,
-			CreatedAt:     time.Now(),
-		})
+		c.JSON(http.StatusAccepted, artist)
 	}
 }
 
 // GetArtist handles GET /api/artists/:id requests to retrieve a single artist record by ID.
 // The :id path parameter is the artist's UUID as returned from CreateArtist or stored in the database.
 //
-// SQL Operation:
-// Executes SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists WHERE id = $1
+// Operation:
+// Calls ArtistService.GetArtistByID() which executes:
+// SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists WHERE id = $1
 // using an indexed primary key lookup for O(1) retrieval performance.
 // Nullable columns (artist_bio, image_url, submitted_by) are scanned into pointer types (*string).
 // If a NULL value is encountered in the database, the pointer is set to nil and the field is omitted
@@ -107,55 +97,21 @@ func CreateArtist(db *pgxpool.Pool) gin.HandlerFunc {
 // - 200 OK: Artist found; returns complete Artist model with all fields
 // - 404 Not Found: No artist with the given ID exists in the database
 // - 500 Internal Server Error: Database error (connection, query failure, etc.)
-func GetArtist(db *pgxpool.Pool) gin.HandlerFunc {
+func GetArtist(artistService *services.ArtistService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Extract the artist ID from the URL path parameter.
 		// The :id placeholder in route registration (e.g., GET /artists/:id) maps to Param("id").
 		id := c.Param("id")
 
-		// Initialize the Artist model and pointer variables for nullable columns.
-		// Using pointers allows us to distinguish between database NULL (nil) and empty strings ("").
-		// This is critical for accurate data representation and API contract clarity.
-		var artist models.Artist
-		var musicBrainzID, imageURL, submittedBy *string
-
-		// Execute a single-row SELECT query using QueryRow.
-		// QueryRow is optimized for single-row results and raises an error if no rows match.
-		// Parameterized queries ($1) prevent SQL injection by escaping special characters.
-		err := db.QueryRow(
-			context.Background(),
-			`SELECT id, name, artist_bio, image_url, submitted_by, created_at
-			 FROM artists WHERE id = $1`,
-			id,
-		// Scan maps query results to destination variables in the same column order as the SELECT clause.
-		// Slice destinations must be addressable (prefixed with &), scalar pointers accept nil for NULL values.
-		).Scan(
-			&artist.ID,
-			&artist.Name,
-			&musicBrainzID,
-			&imageURL,
-			&submittedBy,
-			&artist.CreatedAt,
-		)
+		// Call the service to retrieve the artist by ID.
+		// The service handles the database query and NULL pointer dereferencing.
+		artist, err := artistService.GetArtistByID(context.Background(), id)
 		if err != nil {
-			// QueryRow returns pgx.ErrNoRows when the WHERE clause matches no rows.
-			// This should result in HTTP 404 Not Found per REST conventions.
+			// GetArtistByID returns an error if the artist is not found or a database error occurs.
+			// Per REST conventions, treat not found as HTTP 404.
 			// Other errors (connection failures, scan type mismatches) indicate server problems (500).
 			c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
 			return
-		}
-
-		// Dereference nullable pointers and assign to the model.
-		// This pattern handles the Go type system's inability to represent NULL in non-pointer types.
-		// Only dereference if the pointer is non-nil; omitting this check causes runtime nil dereference panic.
-		if musicBrainzID != nil {
-			artist.MusicBrainzID = *musicBrainzID
-		}
-		if imageURL != nil {
-			artist.ImageURL = *imageURL
-		}
-		if submittedBy != nil {
-			artist.SubmittedBy = *submittedBy
 		}
 
 		// Marshal the Artist struct to JSON and return HTTP 200 OK.
@@ -165,100 +121,213 @@ func GetArtist(db *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-// GetAllArtists handles GET /api/artists requests to retrieve all artist records from the database.
-// The endpoint returns a paginated or complete list of artists depending on query parameters.
+// GetAllArtists handles GET /api/artists requests to retrieve artist records from the database.
+// Supports pagination through query parameters: ?page=1&limit=20
 // This endpoint is useful for populating artist directories, dropdowns, or full metadata exports.
 //
-// SQL Operation:
-// Executes SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists
-// to retrieve all artist records. Results are ordered by created_at descending to show newest artists first.
+// Query Parameters:
+//   - page: Optional page number (default: 1)
+//   - limit: Optional results per page (default: 20, max: 100)
+//
+// Operation:
+// Calls ArtistService.GetAllArtistsWithPagination() which executes:
+// SELECT id, name, artist_bio, image_url, submitted_by, created_at FROM artists
+// with LIMIT and OFFSET to retrieve paginated results. Results are ordered by created_at descending.
 // Nullable columns (artist_bio, image_url, submitted_by) are scanned into pointer types (*string)
 // and omitted from JSON responses if NULL per the struct tag annotations.
 //
 // Response:
-// - 200 OK: Query successful; returns an array of Artist models (empty array if no artists exist)
+// - 200 OK: Query successful; returns paginated array of Artist models with metadata
 // - 500 Internal Server Error: Database error (connection, query failure, etc.)
-func GetAllArtists(db *pgxpool.Pool) gin.HandlerFunc {
+func GetAllArtists(artistService *services.ArtistService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Initialize a slice to hold all artist records from the database.
-		// Using make with zero length and capacity allows dynamic growth as rows are scanned.
-		var artists []models.Artist
+		// Parse pagination parameters from query string
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
 
-		// Execute a multi-row SELECT query to retrieve all artists, ordered by creation timestamp.
-		// Query() returns a Rows iterator that must be explicitly iterated with Next() calls.
-		// Compared to QueryRow, Query() is optimized for variable-length result sets.
-		rows, err := db.Query(
-			context.Background(),
-			`SELECT id, name, artist_bio, image_url, submitted_by, created_at
-			 FROM artists
-			 ORDER BY created_at DESC`,
-		)
+		// Call the service to retrieve paginated APPROVED artists only (public endpoint).
+		// The service filters where approval_status='approved' and handles pagination.
+		artists, total, err := artistService.GetApprovedArtists(context.Background(), page, limit)
 		if err != nil {
 			// Query errors indicate database connectivity or syntax issues (this should not happen in production).
 			// Return 500 and log the error for operational troubleshooting.
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query artists"})
 			return
 		}
-		// Defer ensures the result iterator is properly closed and any connection resources are released.
-		// Failure to close rows can leak server-side cursor resources over time.
-		defer rows.Close()
 
-		// Iterate over all result rows using the Rows iterator.
-		// Next() advances the iterator; it returns false when all rows have been consumed.
-		for rows.Next() {
-			var artist models.Artist
-			var musicBrainzID, imageURL, submittedBy *string
-
-			// Scan the current row's values into Go variables, same pattern as GetArtist single-row queries.
-			// Pointers allow NULL values to be represented as nil; scalar fields get zero values if NULL.
-			err := rows.Scan(
-				&artist.ID,
-				&artist.Name,
-				&musicBrainzID,
-				&imageURL,
-				&submittedBy,
-				&artist.CreatedAt,
-			)
-			if err != nil {
-				// Scan errors indicate type mismatches or corrupted data and should trigger a 500 response.
-				// In production, log this error with row information for debugging.
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to scan artist row"})
-				return
-			}
-
-			// Dereference nullable pointers and assign to the model, using the same NULL-handling pattern
-			// as GetArtist to distinguish between unset fields (NULL) and default/empty values ("").
-			if musicBrainzID != nil {
-				artist.MusicBrainzID = *musicBrainzID
-			}
-			if imageURL != nil {
-				artist.ImageURL = *imageURL
-			}
-			if submittedBy != nil {
-				artist.SubmittedBy = *submittedBy
-			}
-
-			// Append the populated artist to the result slice.
-			// Go's slice append operation automatically handles growth and reallocation.
-			artists = append(artists, artist)
-		}
-
-		// Check the Rows iterator error status after the loop completes.
-		// This catches any errors that occurred during iteration but were not raised in Next().
-		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "error iterating artists"})
-			return
-		}
-
-		// If no artists exist, artists remains as a nil slice or empty slice.
-		// JSON encoding treats both as empty arrays: [], presenting a consistent API contract.
-		// Initialize to empty slice explicitly to ensure non-nil JSON output for tool consistency.
+		// If no artists exist, artists is an empty slice.
+		// JSON encoding treats this as an empty array: [], presenting a consistent API contract.
+		// Ensure non-nil JSON output for tool consistency.
 		if artists == nil {
 			artists = []models.Artist{}
 		}
 
-		// Marshal the artists slice to JSON and return HTTP 200 OK with the array.
-		// Gin's JSON() method handles encoding; the Content-Type is automatically set to application/json.
-		c.JSON(http.StatusOK, artists)
+		// Build paginated response
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       artists,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		// Marshal the paginated response to JSON and return HTTP 200 OK.
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+// GetPendingArtists handles GET /api/admin/artists/pending to retrieve artists awaiting approval.
+// Supports pagination through query parameters: ?page=1&limit=20
+// Admin only endpoint.
+func GetPendingArtists(artistService *services.ArtistService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can view pending artists"})
+			return
+		}
+
+		// Parse pagination parameters
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
+		// Retrieve pending artists
+		artists, total, err := artistService.GetPendingArtists(context.Background(), page, limit)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to query pending artists"})
+			return
+		}
+
+		if artists == nil {
+			artists = []models.Artist{}
+		}
+
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       artists,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		c.JSON(http.StatusOK, response)
+	}
+}
+
+// ApproveArtist handles PATCH /api/admin/artists/:artist_id/approve
+// Marks an artist as approved and records who approved it. Admin only.
+func ApproveArtist(artistService *services.ArtistService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		artistID := c.Param("artist_id")
+
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can approve artists"})
+			return
+		}
+
+		// Approve the artist
+		artist, err := artistService.ApproveArtist(context.Background(), artistID, uid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to approve artist"})
+			return
+		}
+
+		if artist == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, artist)
+	}
+}
+
+// RejectArtist handles PATCH /api/admin/artists/:artist_id/reject
+// Marks an artist as rejected with an optional reason. Admin only.
+func RejectArtist(artistService *services.ArtistService, userService *services.UserService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		artistID := c.Param("artist_id")
+
+		var req struct {
+			RejectionReason string `json:"rejection_reason"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+			return
+		}
+
+		// Check authorization
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(string)
+
+		isAdmin, err := userService.IsAdmin(context.Background(), uid)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		if !isAdmin {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only admins can reject artists"})
+			return
+		}
+
+		// Reject the artist
+		artist, err := artistService.RejectArtist(context.Background(), artistID, uid, req.RejectionReason)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to reject artist"})
+			return
+		}
+
+		if artist == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, artist)
 	}
 }

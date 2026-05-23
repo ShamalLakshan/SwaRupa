@@ -18,6 +18,26 @@ type User struct {
 	// If not provided, the client may choose to display the ID or a generic identifier.
 	DisplayName string `json:"display_name,omitempty"`
 
+	// ContactEmail stores the user's email address when available. Used for support/recovery.
+	// Kept separate from OAuth to support email-based recovery if needed.
+	ContactEmail string `json:"contact_email,omitempty"`
+
+	// GitHubID is the unique GitHub user ID from OAuth provider (numeric, stored as string).
+	GitHubID string `json:"github_id,omitempty"`
+
+	// GitHubUsername is the GitHub login username (e.g., "octocat").
+	GitHubUsername string `json:"github_username,omitempty"`
+
+	// GitHubProfileURL is the URL to the user's GitHub profile (e.g., "https://github.com/octocat").
+	GitHubProfileURL string `json:"github_profile_url,omitempty"`
+
+	// OAuthProvider indicates which OAuth service was used for authentication (e.g., "github").
+	// This field prepares for multi-provider support (Discord, Google, etc.) in the future.
+	OAuthProvider string `json:"oauth_provider,omitempty"`
+
+	// LastLogin records the most recent successful authentication timestamp.
+	LastLogin *time.Time `json:"last_login,omitempty"`
+
 	// Role represents the authorization level of the user within the system.
 	// Common roles include "contributor" (can submit metadata), "moderator" (can review submissions),
 	// and "admin" (has full system access). This field is required and defaults to "contributor" upon creation.

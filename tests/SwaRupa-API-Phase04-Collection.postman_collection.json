@@ -1,0 +1,615 @@
+{
+  "info": {
+    "_postman_id": "swarupa-api-collection",
+    "name": "SwaRupa Music Metadata API",
+    "description": "Test collection for SwaRupa API with Supabase Auth user sync and role-based access patterns",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "access_token",
+      "value": "REPLACE_WITH_SUPABASE_ACCESS_TOKEN"
+    },
+    {
+      "key": "supabase_user_id",
+      "value": "REPLACE_WITH_SUPABASE_USER_ID"
+    },
+    {
+      "key": "supabase_email",
+      "value": "user@example.com"
+    },
+    {
+      "key": "api_key",
+      "value": "REPLACE_WITH_USER_API_KEY"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/health",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "health"]
+            },
+            "description": "Check if server is running"
+          }
+        },
+        {
+          "name": "Welcome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/welcome",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "welcome"]
+            },
+            "description": "Get API information and documentation links"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Sync Supabase User Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{supabase_user_id}}\",\n  \"display_name\": \"John Doe\",\n  \"email\": \"{{supabase_email}}\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/users",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users"]
+            },
+            "description": "Idempotently sync a Supabase Auth user into the local users table. The Supabase user id should be the stable identity reference."
+          }
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/users/{{supabase_user_id}}",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users", "{{supabase_user_id}}"]
+            },
+            "description": "Retrieve a local user profile by Supabase Auth user id"
+          }
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/users",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users"]
+            },
+            "description": "Retrieve all users in the system. This should become admin-only once role protection is tightened."
+          }
+        },
+        {
+          "name": "Link Provider Account",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider_user_id\": \"legacy-email-user-id\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/users/link-provider",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "users", "link-provider"]
+            },
+            "description": "Merge/link an additional provider identity into the authenticated Supabase user"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Artists",
+      "item": [
+        {
+          "name": "Create Artist",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"artist-001\",\n  \"name\": \"The Beatles\",\n  \"artist_bio\": \"British rock band formed in 1960\",\n  \"image_url\": \"https://example.com/beatles.jpg\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/artists",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artists"]
+            },
+            "description": "Create a new artist record"
+          }
+        },
+        {
+          "name": "Get Artist by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/artists/artist-001",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artists", "artist-001"]
+            },
+            "description": "Retrieve a specific artist by ID"
+          }
+        },
+        {
+          "name": "Get All Artists (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/artists?page=1&limit=20",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artists"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Retrieve all artists with pagination"
+          }
+        },
+        {
+          "name": "Search Artists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/search/artists?q=beatles&page=1&limit=20",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["search", "artists"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "beatles"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Fuzzy search artists by name (uses pg_trgm). Supports typos."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Albums",
+      "item": [
+        {
+          "name": "Create Album",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"album-001\",\n  \"title\": \"Abbey Road\",\n  \"release_year\": 1969,\n  \"artist_ids\": [\"artist-001\"]\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/albums",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "albums"]
+            },
+            "description": "Create a new album and associate it with one or more artists"
+          }
+        },
+        {
+          "name": "Get Album by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/albums/album-001",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "albums", "album-001"]
+            },
+            "description": "Retrieve a specific album with its associated artists"
+          }
+        },
+        {
+          "name": "Get All Albums (Paginated)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/albums?page=1&limit=20",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "albums"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Retrieve all albums with pagination and artists"
+          }
+        },
+        {
+          "name": "Search Albums",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/search/albums?q=abbey&page=1&limit=20",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["search", "albums"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "abbey"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Fuzzy search albums by title (uses pg_trgm). Supports typos."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Artworks",
+      "item": [
+        {
+          "name": "Submit Artwork for Album",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"artwork-001\",\n  \"album_id\": \"album-001\",\n  \"image_url\": \"https://example.com/abbey-road-cover.jpg\",\n  \"thumbnail_url\": \"https://example.com/abbey-road-thumb.jpg\",\n  \"is_official\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/albums/album-001/artworks",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "albums", "album-001", "artworks"]
+            },
+            "description": "Submit a new artwork (album cover) for a specific album. approval_status defaults to 'pending'"
+          }
+        },
+        {
+          "name": "Get Artworks for Album (with filters)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/albums/album-001/artworks?page=1&limit=20&status=approved&official=false&sort=priority",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "albums", "album-001", "artworks"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "status",
+                  "value": "approved",
+                  "disabled": true
+                },
+                {
+                  "key": "official",
+                  "value": "false",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "priority",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieve artworks for specific album. Optional filters: status (pending/approved/rejected), official (true), sort (priority)"
+          }
+        },
+        {
+          "name": "Get All Artworks (Global)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/artworks?status=approved&official=false&sort=priority",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "approved",
+                  "disabled": true
+                },
+                {
+                  "key": "official",
+                  "value": "false",
+                  "disabled": true
+                },
+                {
+                  "key": "sort",
+                  "value": "priority",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Retrieve all artworks across all albums with optional filters"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Artwork Sources",
+      "item": [
+        {
+          "name": "Add Artwork Source",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"source-001\",\n  \"source_name\": \"Discogs\",\n  \"source_page\": \"https://www.discogs.com/release/12345\",\n  \"image_url\": \"https://example.com/source-image.jpg\",\n  \"source_type\": \"storefront\",\n  \"confidence_score\": 0.95,\n  \"quality_score\": 0.88,\n  \"is_primary\": true\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/artworks/artwork-001/sources",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks", "artwork-001", "sources"]
+            },
+            "description": "Add a new source for an artwork (e.g., where the image came from)"
+          }
+        },
+        {
+          "name": "List Artwork Sources",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/artworks/artwork-001/sources",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks", "artwork-001", "sources"]
+            },
+            "description": "Retrieve all sources for a specific artwork"
+          }
+        },
+        {
+          "name": "Update Artwork Source",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_name\": \"Discogs Updated\",\n  \"confidence_score\": 0.98,\n  \"quality_score\": 0.92,\n  \"is_primary\": false\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/artworks/artwork-001/sources/source-001",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks", "artwork-001", "sources", "source-001"]
+            },
+            "description": "Update details of an artwork source"
+          }
+        },
+        {
+          "name": "Delete Artwork Source",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/artworks/artwork-001/sources/source-001",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks", "artwork-001", "sources", "source-001"]
+            },
+            "description": "Remove a source from an artwork"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Moderation (Phase 2)",
+      "item": [
+        {
+          "name": "Approve Artwork",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/artworks/artwork-001/approve",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks", "artwork-001", "approve"]
+            },
+            "description": "Approve an artwork (admin only). Sets approval_status to 'approved'. Uses JWT token identity."
+          }
+        },
+        {
+          "name": "Reject Artwork",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/artworks/artwork-001/reject",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "artworks", "artwork-001", "reject"]
+            },
+            "description": "Reject an artwork (admin only). Sets approval_status to 'rejected'. Uses JWT token identity."
+          }
+        }
+      ]
+    }
+  ]
+}
