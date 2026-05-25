@@ -40,14 +40,7 @@ func GetArtworkByIDWithSources(ctx context.Context, db *pgxpool.Pool, artworkID 
 	if submittedBy != nil {
 		aw.SubmittedBy = *submittedBy
 	}
-
-	// Fetch all sources for this artwork
-	sources, err := GetArtworkSourcesByArtworkID(ctx, db, artworkID)
-	if err == nil && sources != nil {
-		aw.Sources = sources
-	} else if sources == nil {
-		aw.Sources = []models.ArtworkSource{} // Ensure non-nil empty slice
-	}
+	aw.Sources = []models.ArtworkSource{} // Keep list responses lightweight
 
 	return &aw, nil
 }
@@ -105,14 +98,7 @@ func GetArtworksByAlbumIDWithSources(ctx context.Context, db *pgxpool.Pool, albu
 		if submittedBy != nil {
 			aw.SubmittedBy = *submittedBy
 		}
-
-		// Fetch sources for this artwork
-		sources, err := GetArtworkSourcesByArtworkID(ctx, db, aw.ID)
-		if err == nil && sources != nil {
-			aw.Sources = sources
-		} else if sources == nil {
-			aw.Sources = []models.ArtworkSource{}
-		}
+		aw.Sources = []models.ArtworkSource{} // Keep list responses lightweight
 
 		artworks = append(artworks, aw)
 	}

@@ -96,9 +96,27 @@ func main() {
 	r := gin.Default()
 
 	// Enable CORS for frontend integration
-	// cors.Default() allows all origins in development
-	// For production, configure specific origins: cors.Config{AllowOrigins: []string{"https://yourdomain.com"}}
-	r.Use(cors.Default())
+	// Explicitly allow the headers and methods used by the frontend fetch layer.
+	r.Use(cors.New(cors.Config{
+		AllowOrigins: []string{
+			"http://localhost:5173",
+			"http://127.0.0.1:5173",
+		},
+		AllowMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodPatch,
+			http.MethodDelete,
+			http.MethodOptions,
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Length",
+			"Content-Type",
+			"Accept",
+			"Authorization",
+		},
+	}))
 
 	authMiddleware := handlers.AuthMiddleware(userService)
 	rateLimitMiddleware := handlers.RateLimitMiddleware(rateLimiter)

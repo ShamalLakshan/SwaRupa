@@ -174,21 +174,45 @@ func GetAllArtworks(artworkService *services.ArtworkService) gin.HandlerFunc {
 		onlyOfficial := c.Query("official") == "true"
 		sortByPriority := c.Query("sort") == "priority"
 
-		// Call service method to get all artworks with filters
-		artworks, err := artworkService.GetAllArtworks(c.Request.Context(), status, onlyOfficial, sortByPriority)
+		// Parse pagination parameters from query string
+		page := 1
+		limit := 20
+		if p := c.Query("page"); p != "" {
+			if parsed, err := strconv.Atoi(p); err == nil {
+				page = parsed
+			}
+		}
+		if l := c.Query("limit"); l != "" {
+			if parsed, err := strconv.Atoi(l); err == nil {
+				limit = parsed
+			}
+		}
+
+		// Call service method to get paginated artworks with filters
+		artworks, total, err := artworkService.GetAllArtworksWithPagination(c.Request.Context(), status, onlyOfficial, sortByPriority, page, limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch artworks"})
 			return
 		}
 
 		// Ensure the response is a non-nil empty array rather than nil if no artworks exist or match.
-		// JSON convention: null implies missing/unset, [] implies empty collection.
 		if artworks == nil {
 			artworks = []models.Artwork{}
 		}
 
-		// Marshal the artworks slice to JSON and return HTTP 200 OK.
-		c.JSON(http.StatusOK, artworks)
+		// Build paginated response
+		page, limit = models.ValidatePaginationParams(page, limit)
+		totalPages := models.CalculateTotalPages(total, limit)
+
+		response := models.PaginatedResponse{
+			Data:       artworks,
+			Page:       page,
+			Limit:      limit,
+			Total:      total,
+			TotalPages: totalPages,
+		}
+
+		c.JSON(http.StatusOK, response)
 	}
 }
 

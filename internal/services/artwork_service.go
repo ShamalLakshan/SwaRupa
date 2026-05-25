@@ -67,6 +67,13 @@ func (s *ArtworkService) GetAllArtworks(ctx context.Context, status string, only
 	return database.GetAllArtworksWithSources(ctx, s.db, status, onlyOfficial, sortByPriority)
 }
 
+// GetAllArtworksWithPagination retrieves paginated artworks across all albums with optional filtering.
+func (s *ArtworkService) GetAllArtworksWithPagination(ctx context.Context, status string, onlyOfficial bool, sortByPriority bool, page, limit int) ([]models.Artwork, int64, error) {
+	page, limit = models.ValidatePaginationParams(page, limit)
+	offset := models.CalculateOffset(page, limit)
+	return database.GetAllArtworksWithPagination(ctx, s.db, status, onlyOfficial, sortByPriority, limit, offset)
+}
+
 // ListArtworkSources retrieves all sources for a specific artwork.
 func (s *ArtworkService) ListArtworkSources(ctx context.Context, artworkID string) ([]models.ArtworkSource, error) {
 	return database.GetArtworkSourcesByArtworkID(ctx, s.db, artworkID)
