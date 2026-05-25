@@ -291,6 +291,87 @@ func GetAllAlbumsWithPagination(ctx context.Context, db *pgxpool.Pool, limit, of
 	return albums, total, nil
 }
 
+// GetAllArtworksWithPagination retrieves all artworks with pagination support.
+// Supports filtering by status and official flag, and sorting.
+func GetAllArtworksWithPagination(ctx context.Context, db *pgxpool.Pool, status string, onlyOfficial bool, sortByPriority bool, limit, offset int) ([]models.Artwork, int64, error) {
+	// Get total count
+	whereClause := "WHERE 1=1"
+	args := []any{}
+	argIdx := 1
+
+	if status != "" {
+		whereClause += fmt.Sprintf(" AND approval_status = $%d", argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+
+	if onlyOfficial {
+		whereClause += " AND is_official = true"
+	}
+
+	var total int64
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM artworks %s`, whereClause)
+	countErr := db.QueryRow(ctx, countQuery, args...).Scan(&total)
+	if countErr != nil {
+		return nil, 0, countErr
+	}
+
+	orderClause := "ORDER BY created_at DESC"
+	if sortByPriority {
+		orderClause = "ORDER BY priority_score DESC"
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, album_id, source_id, image_url, thumbnail_url, is_official,
+		        submitted_by, approval_status, priority_score, created_at
+		 FROM artworks
+		 %s
+		 %s
+		 LIMIT $%d OFFSET $%d`,
+		whereClause, orderClause, argIdx, argIdx+1,
+	)
+
+	args = append(args, limit, offset)
+
+	rows, err := db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	artworks := []models.Artwork{}
+	for rows.Next() {
+		var aw models.Artwork
+		var sourceID, thumbnailURL, submittedBy *string
+
+		if err := rows.Scan(
+			&aw.ID, &aw.AlbumID, &sourceID, &aw.ImageURL, &thumbnailURL, &aw.IsOfficial,
+			&submittedBy, &aw.ApprovalStatus, &aw.PriorityScore, &aw.CreatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+
+		if sourceID != nil {
+			aw.SourceID = *sourceID
+		}
+		if thumbnailURL != nil {
+			aw.ThumbnailURL = *thumbnailURL
+		}
+		if submittedBy != nil {
+			aw.SubmittedBy = *submittedBy
+		}
+
+		aw.Sources = []models.ArtworkSource{}
+		artworks = append(artworks, aw)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return artworks, total, nil
+}
+
 // GetArtworksByAlbumIDWithPagination retrieves paginated artworks for an album with optional filtering.
 func GetArtworksByAlbumIDWithPagination(ctx context.Context, db *pgxpool.Pool, albumID, status string, onlyOfficial bool, sortByPriority bool, limit, offset int) ([]models.Artwork, int64, error) {
 	// Build the WHERE clause dynamically
